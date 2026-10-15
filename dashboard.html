@@ -1,0 +1,604 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script>(function(){try{var t=localStorage.getItem("rain_theme")||"dark";document.documentElement.setAttribute("data-theme",t);}catch(e){}})();</script>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Dashboard — RAIN</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="stylesheet" href="assets/css/style.css">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0a1830">
+<link rel="apple-touch-icon" href="assets/icons/icon-192.png">
+</head>
+<body>
+<div id="app-shell-root"></div>
+
+<template id="dashboard-content">
+  <div class="mb-4">
+    <h1 style="font-family:var(--font-display); font-weight:700; font-size:1.6rem; color:var(--canvas-heading); margin-bottom:.25rem;" id="dashGreeting">Good morning</h1>
+    <p style="color:var(--canvas-body); margin:0;">Here's what's happening around your area.</p>
+  </div>
+
+  <div class="row g-4 mb-4">
+    <div class="col-lg-5">
+      <div class="rain-card rain-card-dark reveal-on-scroll h-100">
+        <div class="card-eyebrow"><span>Community Risk</span><span class="live-badge"><span class="dot"></span>LIVE</span></div>
+        <div class="risk-meter">
+          <div class="risk-ring-wrap">
+            <svg viewBox="0 0 160 160">
+              <circle class="risk-ring-track" cx="80" cy="80" r="70"></circle>
+              <circle class="risk-ring-value" id="riskRingValue" cx="80" cy="80" r="70" stroke-dasharray="439.8" stroke-dashoffset="439.8"></circle>
+            </svg>
+            <div class="risk-ring-center">
+              <span class="num" id="riskScoreNum">0</span>
+              <span class="status-badge status-caution" id="riskLevelBadge"><span class="dot"></span>—</span>
+            </div>
+          </div>
+          <div class="risk-breakdown" id="riskBreakdown"></div>
+        </div>
+        <div class="freshness mt-2"><i class="bi bi-clock-history dicon" data-dicon="clock-history"></i> <span id="riskUpdated">Updated just now</span></div>
+      </div>
+    </div>
+
+    <div class="col-lg-7">
+      <div class="rain-card rain-card-dark reveal-on-scroll h-100" style="padding-bottom:1.1rem;">
+        <div class="card-eyebrow" id="situationMapEyebrow"><span>Live Situation Map</span><span class="live-badge"><span class="dot"></span>LIVE</span></div>
+        <div class="map-filter-row" id="mapFilters">
+          <button class="map-filter-btn active" data-filter="all">All</button>
+          <button class="map-filter-btn" data-filter="alerts">Alerts</button>
+          <button class="map-filter-btn" data-filter="incidents">Incidents</button>
+          <button class="map-filter-btn" data-filter="shelters">Shelters</button>
+        </div>
+        <div class="situation-map-wrap">
+          <div class="map-frame"><div id="situationMap"></div></div>
+          <div class="map-info-panel" id="mapInfoPanel">
+            <button type="button" class="panel-toggle" id="mapInfoToggle" aria-expanded="true">
+              <span>Live Situation</span><i class="bi bi-chevron-down dicon" data-dicon="chevron-down"></i>
+            </button>
+            <div class="panel-body">
+              <div class="legend-row">
+                <span class="icon-chip icon-chip-sm tone-critical"><i class="bi bi-exclamation-triangle-fill dicon" data-dicon="exclamation-triangle-fill"></i></span>
+                <span class="legend-label">Active Alerts</span>
+                <span class="legend-count" id="miAlerts">0</span>
+              </div>
+              <div class="legend-row">
+                <span class="icon-chip icon-chip-sm tone-safe"><i class="bi bi-house-heart-fill dicon" data-dicon="house-heart-fill"></i></span>
+                <span class="legend-label">Evacuation Centers</span>
+                <span class="legend-count" id="miShelters">0</span>
+              </div>
+              <div class="legend-row">
+                <span class="icon-chip icon-chip-sm tone-warning"><i class="bi bi-flag-fill dicon" data-dicon="flag-fill"></i></span>
+                <span class="legend-label">Incidents</span>
+                <span class="legend-count" id="miIncidents">0</span>
+              </div>
+              <div class="legend-row">
+                <span class="icon-chip icon-chip-sm tone-cyan"><i class="bi bi-person-fill dicon" data-dicon="person-fill"></i></span>
+                <span class="legend-label">Your Location</span>
+                <span class="legend-count fs-xs" id="miUserLocSource" style="color:var(--ink-400); font-weight:500;">—</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="row g-3 mb-4">
+    <div class="col-6 col-lg-3">
+      <div class="rain-card reveal-on-scroll">
+        <div class="card-eyebrow"><span>Weather</span><span class="icon-chip tone-cyan" id="statWeatherIcon"><i class="bi bi-cloud-sun dicon" data-dicon="cloud-sun"></i></span></div>
+        <h3 class="card-num" id="statWeatherTemp">—</h3>
+        <span class="status-badge status-caution" id="statWeatherBadge"><span class="dot"></span>—</span>
+        <div class="data-source-line"><i class="bi bi-geo-alt dicon" data-dicon="geo-alt"></i> <span id="statWeatherLoc">Tanauan City, Batangas</span></div>
+      </div>
+    </div>
+    <div class="col-6 col-lg-3">
+      <div class="rain-card reveal-on-scroll">
+        <div class="card-eyebrow"><span>Volcano</span><span class="icon-chip tone-warning"><i class="bi bi-fire dicon" data-dicon="fire"></i></span></div>
+        <h3 class="card-num">AL 1</h3>
+        <span class="status-badge status-caution"><span class="dot pulse-dot"></span>Taal — Reference</span>
+        <div class="data-source-line"><i class="bi bi-info-circle dicon" data-dicon="info-circle"></i> Reference only, not live</div>
+      </div>
+    </div>
+    <div class="col-6 col-lg-3">
+      <div class="rain-card reveal-on-scroll">
+        <div class="card-eyebrow"><span>Active alerts</span><span class="icon-chip tone-critical"><i class="bi bi-bell dicon" data-dicon="bell"></i></span></div>
+        <h3 class="card-num" id="statActiveAlerts" data-count-to="0">0</h3>
+        <span class="status-badge status-caution" id="statActiveAlertsBadge"><span class="dot"></span>—</span>
+      </div>
+    </div>
+    <div class="col-6 col-lg-3">
+      <div class="rain-card reveal-on-scroll">
+        <div class="card-eyebrow"><span>Overall status</span><span class="icon-chip tone-safe"><i class="bi bi-shield-check dicon" data-dicon="shield-check"></i></span></div>
+        <h3 class="card-num" style="font-size:1.4rem;">Stay Alert</h3>
+        <span class="status-badge status-caution"><span class="dot"></span>Elevated</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="row g-4">
+    <div class="col-lg-7">
+      <div class="rain-card reveal-on-scroll mb-4">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+          <h2 class="card-heading m-0">Latest alerts <span class="cached-data-tag d-none" id="dashAlertsCacheTag"><i class="bi bi-cloud-slash"></i> Saved data</span></h2>
+          <a href="alerts.html" class="text-decoration-none" style="font-size:.85rem; color:var(--accent-cyan); font-weight:600;">View all <i class="bi bi-arrow-right dicon" data-dicon="arrow-right"></i></a>
+        </div>
+        <div class="d-flex flex-column gap-3" id="dashAlerts"></div>
+      </div>
+
+      <div class="rain-card reveal-on-scroll">
+        <h2 class="card-heading">Emergency access</h2>
+        <div class="row g-3">
+          <div class="col-4"><a href="emergency.html" class="btn-rain btn-rain-ghost w-100 flex-column py-3" style="height:100%;" data-press><i class="bi bi-telephone fs-4 mb-1 dicon" data-dicon="telephone"></i><span style="font-size:.8rem;">Contacts</span></a></div>
+          <div class="col-4"><a href="emergency.html#evac" class="btn-rain btn-rain-ghost w-100 flex-column py-3" style="height:100%;" data-press><i class="bi bi-signpost-split fs-4 mb-1 dicon" data-dicon="signpost-split"></i><span style="font-size:.8rem;">Evacuation</span></a></div>
+          <div class="col-4"><a href="virtual-assistance.html" class="btn-rain btn-rain-ghost w-100 flex-column py-3" style="height:100%;" data-press><i class="bi bi-chat-dots fs-4 mb-1 dicon" data-dicon="chat-dots"></i><span style="font-size:.8rem;">Ask RAIN</span></a></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-lg-5">
+      <div class="rain-card rain-card-dark reveal-on-scroll" style="background:linear-gradient(160deg, rgba(51,201,209,.16), transparent), linear-gradient(160deg, var(--navy-800), var(--navy-950) 75%);">
+        <div class="d-flex align-items-center gap-2 mb-3">
+          <i class="bi bi-robot fs-4 dicon" style="color:var(--accent-cyan);" data-dicon="robot"></i>
+          <div>
+            <div style="font-weight:700;">Quick AI Assistance</div>
+            <div style="font-size:.78rem; color:rgba(255,255,255,.55);">Virtual Assistance</div>
+          </div>
+        </div>
+        <p style="color:rgba(255,255,255,.7); font-size:.9rem;">Get calm, practical guidance on earthquakes, typhoons, floods, and eruptions — in English or Filipino.</p>
+        <a href="virtual-assistance.html" class="btn-rain btn-rain-primary w-100 justify-content-center" data-press><i class="bi bi-chat-dots dicon" data-dicon="chat-dots"></i> Ask RAIN</a>
+      </div>
+
+      <div class="rain-card reveal-on-scroll mt-4">
+        <h2 class="card-heading">Volcano watch</h2>
+        <div class="d-flex flex-column gap-3" id="dashVolcanoes"></div>
+        <a href="volcano.html" class="btn-rain btn-rain-ghost w-100 justify-content-center mt-3" data-press>View volcano monitoring</a>
+      </div>
+    </div>
+  </div>
+</template>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/animejs@4.5.0/lib/anime.iife.min.js"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="assets/js/animations.js"></script>
+<script src="assets/js/icons.js"></script>
+<script src="assets/js/demo-data.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="assets/js/supabase-client.js"></script>
+<script src="assets/js/rain-auth.js"></script>
+<script src="assets/js/offline-store.js"></script>
+<script src="assets/js/main.js"></script>
+<script type="module">
+  await RainAuth.init();
+  // CARTO Basemaps API key — required since CARTO deprecated anonymous
+  // keyless raster tile access (tiles otherwise render stamped "API KEY
+  // REQUIRED"). Like a Mapbox access token, this is meant to ship in
+  // client-side code and isn't a secret that needs server-side hiding.
+  const CARTO_API_KEY = "cb1_3qde_1_313d908e961a073e7e5de450";
+  const user = renderAppShell("dashboard.html", { title: "Dashboard" });
+  if (user) {
+    document.getElementById("app-content").appendChild(document.getElementById("dashboard-content").content.cloneNode(true));
+
+    // Greeting — time-of-day aware, first name only
+    const hour = new Date().getHours();
+    const timeGreeting = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
+    const firstName = (user.name || "there").split(" ")[0];
+    document.getElementById("dashGreeting").textContent = `${timeGreeting}, ${firstName}`;
+
+    // Weather stat card — fetches live weather directly via /api/weather,
+    // the same serverless proxy weather.html uses. Previously this only
+    // read a localStorage cache that weather.html wrote to, so the card
+    // stayed stuck on "No data yet" until a resident happened to visit the
+    // Weather page first — this removes that dependency entirely.
+    async function loadWeatherStatCard(lat, lng) {
+      const tempEl = document.getElementById("statWeatherTemp");
+      const badgeEl = document.getElementById("statWeatherBadge");
+      const iconEl = document.getElementById("statWeatherIcon");
+      const locEl = document.getElementById("statWeatherLoc");
+      const eyebrow = tempEl.closest(".rain-card").querySelector(".card-eyebrow");
+      eyebrow.querySelector(".demo-data-tag")?.remove();
+
+      try {
+        const res = await fetch(`/api/weather?lat=${lat}&lng=${lng}`);
+        if (!res.ok) throw new Error("weather request failed: " + res.status);
+        const current = await res.json();
+
+        const tempC = Math.round(current.main.temp);
+        const iconCode = current.weather[0].icon;
+        const ICON_MAP = { "01d": "bi-sun", "01n": "bi-moon-stars", "02d": "bi-cloud-sun", "02n": "bi-cloud-moon", "03d": "bi-cloud", "03n": "bi-cloud", "04d": "bi-clouds", "04n": "bi-clouds", "09d": "bi-cloud-drizzle", "09n": "bi-cloud-drizzle", "10d": "bi-cloud-rain", "10n": "bi-cloud-rain", "11d": "bi-cloud-lightning", "11n": "bi-cloud-lightning", "13d": "bi-snow", "13n": "bi-snow", "50d": "bi-cloud-haze", "50n": "bi-cloud-haze" };
+
+        tempEl.textContent = `${tempC}°C`;
+        iconEl.innerHTML = RainIcons.weatherIconHTML(ICON_MAP[iconCode] || "bi-cloud-sun");
+        locEl.textContent = current.name || "Tanauan City, Batangas";
+
+        const tone = tempC >= 34 ? "status-critical" : tempC >= 30 ? "status-caution" : "status-safe";
+        const label = tempC >= 34 ? "High heat" : tempC >= 30 ? "Caution" : "Normal";
+        badgeEl.className = `status-badge ${tone}`;
+        badgeEl.innerHTML = `<span class="dot"></span>${label}`;
+        return tempC;
+      } catch (err) {
+        console.error("Dashboard weather fetch failed, falling back to demo reading:", err);
+        tempEl.textContent = "31°C";
+        iconEl.innerHTML = RainIcons.weatherIconHTML("bi-cloud-sun");
+        locEl.textContent = "Tanauan City, Batangas";
+        badgeEl.className = "status-badge status-caution";
+        badgeEl.innerHTML = `<span class="dot"></span>Normal`;
+        const tag = document.createElement("span");
+        tag.className = "demo-data-tag";
+        tag.textContent = "DEMO DATA";
+        eyebrow.appendChild(tag);
+        return null; // excluded honestly from Community Risk below, not guessed
+      }
+    }
+
+    // Fallback used only if the browser has no geolocation support, the user
+    // denies the permission prompt, or the request times out — never silently
+    // presented as the user's real location (see renderLocationDependent).
+    const FALLBACK_LAT = 14.0863, FALLBACK_LNG = 121.1497; // Tanauan City, Batangas
+    const NEARBY_RADIUS_KM = 60;
+    const { data: liveAlertsRaw, error: alertsFetchError } = await sb.from("alerts").select("*").order("created_at", { ascending: false });
+    let liveAlerts;
+    let dashboardUsingCachedAlerts = false;
+    if (alertsFetchError) {
+      console.error("Fetch alerts error, falling back to last saved alerts:", alertsFetchError);
+      const cachedAlerts = RainOffline.load("alerts");
+      liveAlerts = cachedAlerts ? cachedAlerts.data : [];
+      dashboardUsingCachedAlerts = !!cachedAlerts;
+    } else {
+      liveAlerts = liveAlertsRaw || [];
+      RainOffline.save("alerts", liveAlerts); // shared snapshot — also read by alerts.html and the shell's offline reminder
+    }
+
+    // Community Risk — computed live from the app's real current state
+    // (nearby active alerts, resident-submitted incidents, the nearest
+    // volcano's alert level, and the cached weather reading), not a
+    // fabricated static number. Runs inside renderLocationDependent because
+    // "nearby" needs the resolved user location. Each category is honest
+    // about whether it actually has data to work with.
+    function computeCommunityRisk(userLat, userLng, nearbyAlerts, nearbyIncidents, nearbyQuakes, quakesAvailable, weatherTempC) {
+      const categories = [];
+
+      // Alerts — worst nearby severity, with a small bump per additional
+      // alert so multiple concurrent advisories still nudge the score up.
+      const sevWeight = { information: 15, advisory: 40, warning: 70, critical: 100 };
+      const alertsValue = nearbyAlerts.length
+        ? Math.min(100, Math.max(...nearbyAlerts.map((a) => sevWeight[a.severity] || 0)) + (nearbyAlerts.length - 1) * 5)
+        : 0;
+      categories.push({ label: "Alerts", value: alertsValue, icon: "bi-exclamation-triangle", hasData: true });
+
+      // Incidents — real resident reports (seeded demo ones + anything
+      // actually submitted via report.html), filtered to nearby.
+      const incidentsValue = Math.min(100, nearbyIncidents.length * 20);
+      categories.push({ label: "Incidents", value: incidentsValue, icon: "bi-flag", hasData: true });
+
+      // Volcano — the NEAREST volcano's reference alert level (0-5), not the
+      // worst level anywhere in the country. A distant volcano's eruption
+      // shouldn't spike a Tanauan resident's risk score; Taal, ~15km away,
+      // should carry far more weight here.
+      const volcanoes = RAIN_DEMO.volcanoes || [];
+      let volcanoValue = 0, nearestVolcano = null, nearestDistKm = Infinity;
+      volcanoes.forEach((v) => {
+        const d = haversineKm(userLat, userLng, v.lat, v.lng);
+        if (d < nearestDistKm) { nearestDistKm = d; nearestVolcano = v; }
+      });
+      const VOLCANO_RANGE_KM = 150; // ashfall/lahar-relevant range
+      if (nearestVolcano && nearestDistKm <= VOLCANO_RANGE_KM) {
+        volcanoValue = Math.round((nearestVolcano.level / 5) * 100);
+      }
+      categories.push({ label: "Volcano", value: volcanoValue, icon: "bi-triangle", hasData: true });
+
+      // Weather — only real, live data (fetched via /api/weather, same as
+      // the stat card above). Honestly excluded if that fetch failed.
+      let weatherValue = 0, weatherHasData = false;
+      if (typeof weatherTempC === "number") {
+        weatherHasData = true;
+        weatherValue = weatherTempC >= 36 ? 100 : weatherTempC >= 34 ? 75 : weatherTempC >= 30 ? 45 : weatherTempC >= 25 ? 20 : 10;
+      }
+      categories.push({ label: "Weather", value: weatherValue, icon: "bi-cloud-sun", hasData: weatherHasData });
+
+      // Earthquake — worst nearby (within 300km — shaking travels far
+      // beyond an epicenter) magnitude in the last 7 days, from the live
+      // USGS feed (see fetchPhilippineEarthquakes in main.js). Excluded
+      // honestly if the feed couldn't be reached, same as Weather above.
+      let earthquakeValue = 0;
+      if (quakesAvailable && nearbyQuakes.length) {
+        earthquakeValue = Math.max(...nearbyQuakes.map((q) => quakeRiskValue(q.mag)));
+      }
+      categories.push({ label: "Earthquake", value: earthquakeValue, icon: "bi-activity", hasData: quakesAvailable });
+
+      const scored = categories.filter((c) => c.hasData);
+      const score = scored.length ? Math.round(scored.reduce((sum, c) => sum + c.value, 0) / scored.length) : 0;
+      const level = score >= 75 ? "HIGH" : score >= 50 ? "ELEVATED" : score >= 25 ? "GUARDED" : "LOW";
+
+      return { score, level, categories };
+    }
+
+    // Community Risk meter — animated ring + category bars, fed by
+    // computeCommunityRisk() above (real app state, not demo data).
+    function renderRiskMeter(risk) {
+      const circumference = 2 * Math.PI * 70;
+      const ring = document.getElementById("riskRingValue");
+      const badge = document.getElementById("riskLevelBadge");
+      const levelTone = risk.score >= 75 ? "status-critical" : risk.score >= 50 ? "status-warning" : risk.score >= 25 ? "status-caution" : "status-safe";
+      badge.className = `status-badge ${levelTone}`;
+      badge.innerHTML = `<span class="dot"></span>${risk.level}`;
+      ring.style.stroke = getComputedStyle(document.documentElement).getPropertyValue(
+        levelTone === "status-critical" ? "--status-critical" : levelTone === "status-warning" ? "--status-warning" : levelTone === "status-caution" ? "--status-caution" : "--status-safe"
+      );
+
+      const breakdown = document.getElementById("riskBreakdown");
+      breakdown.innerHTML = "";
+      const scoredMax = Math.max(...risk.categories.filter((c) => c.hasData).map((c) => c.value), 1);
+      risk.categories.forEach((c) => {
+        const row = document.createElement("div");
+        row.className = "risk-row";
+        if (c.hasData) {
+          row.innerHTML = `<span class="label"><i class="bi ${c.icon}"></i> ${c.label}</span><span class="bar-track"><span class="bar-fill" data-target="${(c.value / scoredMax) * 100}"></span></span><span class="val">${c.value}</span>`;
+        } else {
+          row.innerHTML = `<span class="label"><i class="bi ${c.icon}"></i> ${c.label}</span><span class="bar-track"><span class="bar-fill" data-target="0"></span></span><span class="val fs-xs" style="color:var(--ink-400);">No data yet</span>`;
+        }
+        breakdown.appendChild(row);
+      });
+
+      const scoreEl = document.getElementById("riskScoreNum");
+      const reduceMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      if (reduceMotion || !window.anime) {
+        scoreEl.textContent = risk.score;
+        ring.style.strokeDashoffset = circumference - (circumference * risk.score) / 100;
+        breakdown.querySelectorAll(".bar-fill").forEach((b) => (b.style.width = b.dataset.target + "%"));
+      } else {
+        const obj = { val: 0 };
+        anime.animate(obj, {
+          val: risk.score, duration: 1000, easing: "easeOutExpo",
+          onUpdate: () => {
+            scoreEl.textContent = Math.round(obj.val);
+            ring.style.strokeDashoffset = circumference - (circumference * obj.val) / 100;
+          },
+          onComplete: () => ring.classList.add("settled"),
+        });
+        anime.animate(breakdown.querySelectorAll(".bar-fill"), {
+          width: (el) => [0, el.dataset.target + "%"],
+          duration: 800, delay: anime.stagger(90, { start: 200 }), easing: "easeOutQuad",
+        });
+      }
+
+      document.getElementById("riskUpdated").textContent = "Updated just now";
+    }
+
+    // Live Situation Map — alerts, incidents, evacuation centers, user location.
+    // Everything here depends on where the user actually is, so it only runs
+    // once we've resolved a real (or explicitly-fallback) location — see the
+    // geolocation call at the bottom of this script.
+    async function renderLocationDependent(userLat, userLng, isRealLocation, quakes, weatherTempC) {
+      // "How many alerts affect ME" — computed here, against the resolved
+      // location, then reused by both the hero stat card and the map/legend
+      // below, instead of each spot hardcoding its own number that can drift.
+      const nearbyAlerts = liveAlerts.filter((a) => haversineKm(userLat, userLng, a.lat, a.lng) <= NEARBY_RADIUS_KM);
+      document.getElementById("statActiveAlerts").setAttribute("data-count-to", nearbyAlerts.length);
+      const criticalNearby = nearbyAlerts.filter((a) => a.severity === "critical").length;
+      const alertsStatBadge = document.getElementById("statActiveAlertsBadge");
+      if (criticalNearby > 0) {
+        alertsStatBadge.className = "status-badge status-critical";
+        alertsStatBadge.innerHTML = `<span class="dot pulse-dot"></span>${criticalNearby} Critical`;
+      } else if (nearbyAlerts.length > 0) {
+        alertsStatBadge.className = "status-badge status-caution";
+        alertsStatBadge.innerHTML = `<span class="dot"></span>Monitor`;
+      } else {
+        alertsStatBadge.className = "status-badge status-safe";
+        alertsStatBadge.innerHTML = `<span class="dot"></span>None nearby`;
+      }
+
+      // Map-pinnable incidents = the seeded demo incidents PLUS any resident
+      // report submitted with a detected lat/lng (see report.html). Reports
+      // without a location (permission denied) still show up on
+      // admin-incidents.html, just not on this map. Computed here (not just
+      // inside the map code below) because Community Risk needs it too.
+      const { data: dbIncidents, error: incidentsFetchError } = await sb
+        .from("incidents")
+        .select("*, profiles(full_name)")
+        .not("lat", "is", null)
+        .not("lng", "is", null);
+      if (incidentsFetchError) console.error("Fetch incidents error:", incidentsFetchError);
+      const reportedWithCoords = (dbIncidents || []).map((r) => ({
+        title: r.category || "Incident report",
+        lat: r.lat,
+        lng: r.lng,
+        area: r.profiles?.full_name ? `Reported by ${r.profiles.full_name}` : "Resident report",
+        updated: new Date(r.created_at).toLocaleString(),
+      }));
+      const allIncidents = [...(RAIN_DEMO.incidents || []), ...reportedWithCoords];
+      const nearbyIncidents = allIncidents.filter((inc) => haversineKm(userLat, userLng, inc.lat, inc.lng) <= NEARBY_RADIUS_KM);
+
+      // Earthquakes — quakes is null if the live USGS fetch failed (see
+      // finishInit below); "hasData: false" propagates that honestly into
+      // the risk card instead of silently treating a failed fetch as zero.
+      const QUAKE_RANGE_KM = 300; // shaking travels well beyond the epicenter
+      const quakesAvailable = Array.isArray(quakes);
+      const nearbyQuakes = quakesAvailable ? quakes.filter((q) => haversineKm(userLat, userLng, q.lat, q.lng) <= QUAKE_RANGE_KM) : [];
+
+      renderRiskMeter(computeCommunityRisk(userLat, userLng, nearbyAlerts, nearbyIncidents, nearbyQuakes, quakesAvailable, weatherTempC));
+
+      // The map is only ever as "LIVE" as its two weakest links: whether we
+      // actually know where the user is, and the fact that alerts/incidents/
+      // shelters here are still demo data, not a real PAGASA/NDRRMC feed. Say
+      // so plainly instead of showing a "LIVE" badge that overstates both.
+      const eyebrow = document.getElementById("situationMapEyebrow");
+      const existingTag = eyebrow.querySelector(".demo-data-tag");
+      if (existingTag) existingTag.remove();
+      const tag = document.createElement("span");
+      tag.className = "demo-data-tag";
+      tag.textContent = "DEMO DATA";
+      eyebrow.appendChild(tag);
+
+      const locSourceEl = document.getElementById("miUserLocSource");
+      if (locSourceEl) locSourceEl.textContent = isRealLocation ? "GPS" : "Approximate (no GPS)";
+
+      const map = L.map("situationMap", { zoomControl: true }).setView([userLat, userLng], 13);
+      L.tileLayer(`https://basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png?key=${CARTO_API_KEY}`, { attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>', maxZoom: 20 }).addTo(map);
+
+      const pinIcon = rainPinIcon; // shared helper — see assets/js/main.js
+
+      const groups = {
+        user: L.layerGroup([L.marker([userLat, userLng], { icon: pinIcon("user", "bi-person-fill") }).bindPopup(isRealLocation ? "Your location" : "Approximate location (GPS unavailable — showing Tanauan City, Batangas)")]),
+        alerts: L.layerGroup(),
+        incidents: L.layerGroup(),
+        shelters: L.layerGroup(),
+      };
+
+      // Alerts: this is a LOCAL situational map, so only pin alerts that are
+      // actually near the user's location — using each alert's real coordinates,
+      // not a fabricated offset. A Bicol Region typhoon advisory has no business
+      // appearing to be next door to a resident in Tanauan City, Batangas.
+      nearbyAlerts.forEach((a) => {
+        L.marker([a.lat, a.lng], { icon: pinIcon("alert", "bi-exclamation-triangle-fill", a.severity === "critical") })
+          .bindPopup(`<strong>${a.title}</strong><br>${a.area}`)
+          .addTo(groups.alerts);
+      });
+
+      // Map-pinnable incidents (nearby + seeded + resident-reported) were
+      // already computed above for Community Risk — reuse allIncidents here.
+      allIncidents.forEach((inc) => {
+        L.marker([inc.lat, inc.lng], { icon: pinIcon("incident", "bi-flag-fill") })
+          .bindPopup(`<strong>${inc.title}</strong><br>${inc.area} · ${inc.updated}`)
+          .addTo(groups.incidents);
+      });
+
+      // Shelters, barangay/city halls, and SM malls that accept evacuees all
+      // share the "shelters" filter/layer group, but keep their own marker
+      // color via `category` — see assets/js/demo-data.js.
+      const EVAC_ICONS = { shelter: "bi-house-heart-fill", government: "bi-bank2", mall: "bi-shop" };
+      RAIN_DEMO.evacuationCenters.forEach((c) => {
+        const cat = c.category || "shelter";
+        L.marker([c.lat, c.lng], { icon: pinIcon(cat, EVAC_ICONS[cat] || EVAC_ICONS.shelter) })
+          .bindPopup(`<strong>${c.name}</strong><br>${c.type || ""}<br>${c.address}`)
+          .addTo(groups.shelters);
+      });
+
+      groups.user.addTo(map);
+      groups.alerts.addTo(map);
+      groups.incidents.addTo(map);
+      groups.shelters.addTo(map);
+
+      // Legend counts describe what's actually plotted on THIS map — i.e.
+      // nearby alerts, not the app-wide alert total (that full list lives on
+      // alerts.html). If some alerts are active but out of range, say so
+      // rather than silently showing a number that doesn't match the pins.
+      document.getElementById("miAlerts").textContent = nearbyAlerts.length;
+      const alertsLabel = document.querySelector('.map-info-panel .legend-row:nth-child(1) .legend-label');
+      if (alertsLabel && nearbyAlerts.length !== liveAlerts.length) {
+        alertsLabel.textContent = `Nearby Alerts (of ${liveAlerts.length} total)`;
+      }
+      document.getElementById("miShelters").textContent = RAIN_DEMO.evacuationCenters.length;
+      document.getElementById("miIncidents").textContent = allIncidents.length;
+
+      // Collapsible info panel — starts collapsed on small screens so it
+      // never sits over the map controls or eats too much of the view.
+      const infoPanel = document.getElementById("mapInfoPanel");
+      const infoToggle = document.getElementById("mapInfoToggle");
+      const setPanelCollapsed = (collapsed) => {
+        infoPanel.classList.toggle("collapsed", collapsed);
+        infoToggle.setAttribute("aria-expanded", String(!collapsed));
+      };
+      setPanelCollapsed(window.innerWidth < 992);
+      infoToggle.addEventListener("click", () => setPanelCollapsed(!infoPanel.classList.contains("collapsed")));
+
+      document.querySelectorAll("#mapFilters .map-filter-btn").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          document.querySelectorAll("#mapFilters .map-filter-btn").forEach((b) => b.classList.remove("active"));
+          btn.classList.add("active");
+          const f = btn.dataset.filter;
+          Object.entries(groups).forEach(([key, layer]) => {
+            if (key === "user") return; // always show the user's location
+            if (f === "all" || f === key) { if (!map.hasLayer(layer)) layer.addTo(map); }
+            else if (map.hasLayer(layer)) map.removeLayer(layer);
+          });
+        });
+      });
+
+      // Deep-link support: ?focus=incidents|alerts|shelters pre-selects the
+      // matching map filter. Used by the Virtual Assistance chatbot to send
+      // people straight to the live data it can't answer inline (see
+      // virtual-assistance.html's detectDataIntent()).
+      const focusParam = new URLSearchParams(window.location.search).get("focus");
+      const focusBtn = focusParam && document.querySelector(`#mapFilters .map-filter-btn[data-filter="${focusParam}"]`);
+      if (focusBtn) focusBtn.click();
+
+      setTimeout(() => map.invalidateSize(), 200);
+    }
+
+    const severityMap = { information: "level-info", advisory: "level-advisory", warning: "level-warning", critical: "level-critical" };
+    const statusMap = { information: "status-safe", advisory: "status-caution", warning: "status-warning", critical: "status-critical" };
+    const alertsHost = document.getElementById("dashAlerts");
+    document.getElementById("dashAlertsCacheTag")?.classList.toggle("d-none", !dashboardUsingCachedAlerts);
+    if (!liveAlerts.length) {
+      alertsHost.innerHTML = `<div class="empty-state-inline"><i class="bi bi-check-circle glyph dicon" data-dicon="check-circle"></i><p>No active alerts near you right now.</p></div>`;
+    } else {
+      liveAlerts.slice(0, 3).forEach((a) => {
+        const div = document.createElement("div");
+        div.className = `alert-banner ${severityMap[a.severity]} reveal-on-scroll`;
+        div.innerHTML = `<i class="bi bi-exclamation-triangle icon dicon" data-dicon="exclamation-triangle"></i>
+          <div>
+            <div class="d-flex align-items-center gap-2 mb-1">
+              <strong>${a.title}</strong>
+              <span class="status-badge ${statusMap[a.severity]} fs-xs">${a.severity}</span>
+            </div>
+            <div class="fs-90">${a.message}</div>
+            <div class="data-source-line mt-1"><i class="bi bi-geo"></i> ${a.area}</div>
+          </div>`;
+        alertsHost.appendChild(div);
+      });
+    }
+
+    const volcHost = document.getElementById("dashVolcanoes");
+    const levelColor = (l) => (l === 0 ? "status-safe" : l <= 1 ? "status-caution" : l <= 3 ? "status-warning" : "status-critical");
+    const volcanoes = (RAIN_DEMO.volcanoes || []).slice(0, 3);
+    if (!volcanoes.length) {
+      volcHost.innerHTML = `<div class="empty-state-inline"><i class="bi bi-triangle glyph dicon" data-dicon="triangle"></i><p>No volcano data available right now.</p></div>`;
+    } else {
+      volcanoes.forEach((v) => {
+        const div = document.createElement("div");
+        div.className = "d-flex justify-content-between align-items-center";
+        div.innerHTML = `<div>
+            <div class="fw-semibold fs-90" style="color:var(--navy-950);">${v.name}</div>
+            <div class="fs-xs" style="color:var(--ink-400);">${v.location}</div>
+          </div>
+          <span class="status-badge ${levelColor(v.level)} ${v.level >= 3 ? "badge-live" : ""}"><span class="dot ${v.level > 0 ? "pulse-dot" : ""}"></span>AL ${v.level}</span>`;
+        volcHost.appendChild(div);
+      });
+    }
+
+    // Resolve the user's real location before drawing anything that depends
+    // on it. Falls back to the Tanauan City, Batangas demo point — clearly labeled
+    // as approximate, never presented as if it were the user's real GPS —
+    // if geolocation isn't supported, is denied, or times out. Also fetches
+    // live earthquake data (no key needed — see fetchPhilippineEarthquakes
+    // in main.js) for the Community Risk card; a failed fetch degrades to
+    // an honestly-excluded category rather than blocking the rest of the page.
+    async function finishInit(lat, lng, isRealLocation) {
+      let quakes = null;
+      try {
+        quakes = await fetchPhilippineEarthquakes({ days: 7, minMagnitude: 2.5 });
+      } catch (err) {
+        console.warn("Live earthquake fetch failed for Community Risk.", err);
+      }
+      const weatherTempC = await loadWeatherStatCard(lat, lng);
+      await renderLocationDependent(lat, lng, isRealLocation, quakes, weatherTempC);
+      initializeAnimations();
+    }
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => finishInit(pos.coords.latitude, pos.coords.longitude, true),
+        () => finishInit(FALLBACK_LAT, FALLBACK_LNG, false),
+        { timeout: 8000 }
+      );
+    } else {
+      finishInit(FALLBACK_LAT, FALLBACK_LNG, false);
+    }
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script>(function(){try{var t=localStorage.getItem("rain_theme")||"dark";document.documentElement.setAttribute("data-theme",t);}catch(e){}})();</script>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Taal Volcano — RAIN</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="stylesheet" href="assets/css/style.css">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0a1830">
+<link rel="apple-touch-icon" href="assets/icons/icon-192.png">
+</head>
+<body>
+<div id="app-shell-root"></div>
+
+<template id="volcano-content">
+  <div class="rain-card reveal-on-scroll mb-4">
+    <div class="card-eyebrow"><span>Taal Volcano</span><span class="demo-data-tag" style="background:var(--accent-cyan); color:#fff;">LIVE</span></div>
+    <div class="d-flex flex-wrap justify-content-between align-items-start gap-3">
+      <div class="d-flex align-items-start gap-2">
+        <i class="bi bi-fire fs-2 dicon-in-view bi-anim" style="color:var(--status-warning); cursor:pointer;" title="Tap to see it erupt"></i>
+        <div>
+          <h3 class="card-num" id="tvName" style="font-size:1.6rem;">Taal Volcano</h3>
+          <div class="text-muted-rain" style="font-size:.88rem;" id="tvLocation">Talisay / San Nicolas, Batangas, Philippines</div>
+        </div>
+      </div>
+      <span class="status-badge status-caution" id="tvAlertBadge"><span class="dot pulse-dot"></span>Alert Level —</span>
+    </div>
+    <div class="row g-2 mt-2" style="font-size:.85rem;">
+      <div class="col-6 col-md-3"><span class="text-muted-rain">Coordinates</span><div style="font-weight:600;" id="tvCoords">—</div></div>
+      <div class="col-6 col-md-3"><span class="text-muted-rain">Elevation</span><div style="font-weight:600;" id="tvElev">—</div></div>
+      <div class="col-6 col-md-3"><span class="text-muted-rain">GVP volcano #</span><div style="font-weight:600;" id="tvVnum">273070</div></div>
+      <div class="col-6 col-md-3"><span class="text-muted-rain">Aviation color</span><div style="font-weight:600;" id="tvColor">—</div></div>
+    </div>
+    <div class="data-source-line" id="tvSourceLine"><i class="bi bi-broadcast dicon" data-dicon="broadcast"></i> Loading live data from USGS VolcView…</div>
+  </div>
+
+  <div class="row g-4 mb-4">
+    <div class="col-lg-5">
+      <div class="rain-card reveal-on-scroll h-100">
+        <div class="card-eyebrow"><span>Conditions at Taal</span><span class="demo-data-tag" style="background:var(--accent-cyan); color:#fff;">LIVE</span></div>
+        <div id="wxLoading" style="padding:.25rem 0;">
+          <span class="skeleton d-block mb-3" style="width:50%; height:2.2rem;"></span>
+          <span class="skeleton d-block mb-3" style="width:60%; height:16px;"></span>
+          <div class="row g-2">
+            <div class="col-6"><span class="skeleton d-block" style="height:32px;"></span></div>
+            <div class="col-6"><span class="skeleton d-block" style="height:32px;"></span></div>
+            <div class="col-6 mt-2"><span class="skeleton d-block" style="height:32px;"></span></div>
+            <div class="col-6 mt-2"><span class="skeleton d-block" style="height:32px;"></span></div>
+          </div>
+        </div>
+        <div id="wxError" class="error-state d-none" style="padding:1.5rem 0;">
+          <div class="glyph"><i class="bi bi-exclamation-octagon dicon" data-dicon="exclamation-octagon"></i></div>
+          <div><strong>Unable to retrieve weather data.</strong></div>
+          <button class="btn-rain btn-rain-ghost btn-rain-sm mt-3" id="wxRetry">Retry</button>
+        </div>
+        <div id="wxBody" class="d-none">
+          <h3 class="card-num" id="wTemp" style="font-size:2.6rem;">—</h3>
+          <div class="d-flex align-items-center gap-2 mb-3">
+            <i class="bi bi-cloud-sun fs-3 dicon" style="color:var(--accent-cyan);" id="wIcon" data-dicon="cloud-sun"></i>
+            <span id="wCondition" style="font-weight:600; color:var(--navy-950);">—</span>
+          </div>
+          <div class="row g-2" style="font-size:.85rem;">
+            <div class="col-6"><span class="text-muted-rain">Feels like</span><div style="font-weight:600;" id="wFeels">—</div></div>
+            <div class="col-6"><span class="text-muted-rain">Humidity</span><div style="font-weight:600;" id="wHumidity">—</div></div>
+            <div class="col-6"><span class="text-muted-rain">Wind</span><div style="font-weight:600;" id="wWind">—</div></div>
+            <div class="col-6"><span class="text-muted-rain">Visibility</span><div style="font-weight:600;" id="wVisibility">—</div></div>
+          </div>
+          <p class="text-muted-rain mt-2" style="font-size:.78rem;">Wind direction is useful context for likely ash/gas plume drift, but isn't a hazard forecast — always follow official PHIVOLCS advisories.</p>
+          <div class="data-source-line" id="wxSourceLine"><i class="bi bi-clock-history dicon" data-dicon="clock-history"></i> Source: OpenWeatherMap</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-lg-7">
+      <div class="rain-card reveal-on-scroll h-100">
+        <div class="card-eyebrow"><span>Location Map</span><span class="demo-data-tag" style="background:var(--accent-cyan); color:#fff;">LIVE</span></div>
+        <div class="map-frame"><div id="volcano-map"></div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="rain-card reveal-on-scroll mb-4">
+    <div class="card-eyebrow"><span>Alert Level Reference</span><span class="demo-data-tag">REFERENCE, NOT LIVE</span></div>
+    <p style="font-size:.87rem; color:var(--ink-600);">
+      Taal's official 0–5 Alert Level is issued by PHIVOLCS, which doesn't publish a public API — so this app can't pull it live.
+      The last publicly known level is shown below for context only. <strong>Always check PHIVOLCS directly for the current advisory
+      before making any decisions.</strong>
+    </p>
+    <div class="d-flex align-items-center gap-3">
+      <div class="level-chip status-caution" style="width:2.5rem;height:2.5rem;display:flex;align-items:center;justify-content:center;font-weight:700;border-radius:50%;">1</div>
+      <div>
+        <div style="font-weight:700; color:var(--navy-950);">Low-Level Unrest</div>
+        <div style="font-size:.82rem; color:var(--ink-600);">Sudden steam-driven (phreatic) or minor phreatomagmatic eruptions, volcanic gas expulsions, and ashfall can occur without further warning. The entire Taal Volcano Island is a Permanent Danger Zone.</div>
+      </div>
+    </div>
+    <div class="data-source-line"><i class="bi bi-box-arrow-up-right dicon" data-dicon="box-arrow-up-right"></i> <a href="https://www.phivolcs.dost.gov.ph/" target="_blank" rel="noopener">Check the current advisory at phivolcs.dost.gov.ph &rarr;</a></div>
+  </div>
+
+  <div class="rain-card reveal-on-scroll">
+    <div class="card-eyebrow"><span>About Taal</span><i class="bi bi-info-circle dicon" style="color:var(--accent-cyan);" data-dicon="info-circle"></i></div>
+    <p style="font-size:.87rem; color:var(--ink-600);">
+      Taal is a caldera roughly 15 by 20 km wide in southwestern Luzon, largely filled by Lake Taal. Its low-lying Volcano
+      Island, near sea level at the lake's center, is where all of its historical eruptions have originated, and it has a long
+      record of powerful, sometimes deadly, eruptions. Because the caldera sits so close to the surrounding lake and its
+      vents are shallow, it's especially prone to abrupt phreatic and phreatomagmatic explosions.
+    </p>
+    <div class="data-source-line"><i class="bi bi-box-arrow-up-right dicon" data-dicon="box-arrow-up-right"></i> <a id="tvGvpLink" href="https://volcano.si.edu/volcano.cfm?vn=273070" target="_blank" rel="noopener">View Taal's full profile and latest activity reports on the Smithsonian GVP site &rarr;</a></div>
+  </div>
+</template>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/animejs@4.5.0/lib/anime.iife.min.js"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="assets/js/animations.js"></script>
+<script src="assets/js/icons.js"></script>
+<script src="assets/js/demo-data.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="assets/js/supabase-client.js"></script>
+<script src="assets/js/rain-auth.js"></script>
+<script src="assets/js/offline-store.js"></script>
+<script src="assets/js/main.js"></script>
+<script type="module">
+  await RainAuth.init();
+  // CARTO Basemaps API key — required since CARTO deprecated anonymous
+  // keyless raster tile access (tiles otherwise render stamped "API KEY
+  // REQUIRED"). Like a Mapbox access token, this is meant to ship in
+  // client-side code and isn't a secret that needs server-side hiding.
+  const CARTO_API_KEY = "cb1_3qde_1_313d908e961a073e7e5de450";
+  const user = renderAppShell("volcano.html", { title: "Taal Volcano" });
+
+  // Taal's official Smithsonian GVP volcano number, used against the USGS
+  // VolcView worldwide-volcanoes API (no key required).
+  const TAAL_VNUM = "273070";
+  // Fallback coordinates if the live location fetch fails.
+  const TAAL_FALLBACK = { lat: 14.0021, lng: 120.9932, elevM: 311 };
+
+  const AVIATION_COLOR_META = {
+    GREEN: "Green (normal)",
+    YELLOW: "Yellow (advisory)",
+    ORANGE: "Orange (watch)",
+    RED: "Red (warning)",
+  };
+
+  const ICON_MAP = {
+    "01d": "bi-sun", "01n": "bi-moon-stars",
+    "02d": "bi-cloud-sun", "02n": "bi-cloud-moon",
+    "03d": "bi-cloud", "03n": "bi-cloud",
+    "04d": "bi-clouds", "04n": "bi-clouds",
+    "09d": "bi-cloud-drizzle", "09n": "bi-cloud-drizzle",
+    "10d": "bi-cloud-rain", "10n": "bi-cloud-rain",
+    "11d": "bi-cloud-lightning", "11n": "bi-cloud-lightning",
+    "13d": "bi-snow", "13n": "bi-snow",
+    "50d": "bi-cloud-haze", "50n": "bi-cloud-haze",
+  };
+
+  function compassFromDegrees(deg) {
+    const dirs = ["N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE", "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW"];
+    return dirs[Math.round(deg / 22.5) % 16];
+  }
+
+  async function fetchTaalLocation() {
+    const res = await fetch("https://volcview.wr.usgs.gov/vv-api/volcanoApi/wwvolcanoes");
+    if (!res.ok) throw new Error("VolcView request failed: " + res.status);
+    const all = await res.json();
+    const taal = all.find((x) => String(x.vnum) === TAAL_VNUM);
+    if (!taal) throw new Error("Taal not found in VolcView response");
+    return taal;
+  }
+
+  async function loadLocation() {
+    let loc, live = true;
+    try {
+      loc = await fetchTaalLocation();
+    } catch (err) {
+      console.warn("Live Taal location fetch failed, using fallback coordinates.", err);
+      loc = TAAL_FALLBACK;
+      live = false;
+    }
+
+    document.getElementById("tvCoords").textContent = `${loc.lat.toFixed(4)}, ${loc.lng.toFixed(4)}`;
+    document.getElementById("tvElev").textContent = `${loc.elevM} m`;
+    document.getElementById("tvColor").textContent = loc.color ? (AVIATION_COLOR_META[loc.color] || loc.color) : "None on file";
+    if (live) RainOffline.save("taalLocation", loc);
+    const savedLoc = RainOffline.load("taalLocation");
+    document.getElementById("tvSourceLine").innerHTML = live
+      ? `<i class="bi bi-broadcast dicon" data-dicon="broadcast"></i> Live from USGS VolcView (worldwide volcanoes API), fetched just now.`
+      : `<i class="bi bi-exclamation-triangle dicon" data-dicon="exclamation-triangle"></i> USGS VolcView was unreachable — showing ${savedLoc ? `coordinates saved ${RainOffline.timeAgo(savedLoc.savedAt)}` : "fallback coordinates"} instead.`;
+
+    const map = L.map("volcano-map").setView([loc.lat, loc.lng], 12);
+    L.tileLayer(`https://basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png?key=${CARTO_API_KEY}`, { attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>', maxZoom: 20 }).addTo(map);
+    L.marker([loc.lat, loc.lng], { icon: rainPinIcon("alert", "bi-fire") }).addTo(map).bindPopup("<strong>Taal Volcano</strong><br>Volcano Island, Lake Taal").openPopup();
+    setTimeout(() => map.invalidateSize(), 200);
+
+    return loc;
+  }
+
+  async function loadWeather(lat, lng) {
+    document.getElementById("wxLoading").classList.remove("d-none");
+    document.getElementById("wxBody").classList.add("d-none");
+    document.getElementById("wxError").classList.add("d-none");
+    try {
+      const res = await fetch(`/api/weather?lat=${lat}&lng=${lng}`);
+      if (!res.ok) throw new Error("OpenWeatherMap request failed: " + res.status);
+      const current = await res.json();
+
+      document.getElementById("wTemp").textContent = `${Math.round(current.main.temp)}°C`;
+      document.getElementById("wCondition").textContent = current.weather[0].description.replace(/\b\w/g, (c) => c.toUpperCase());
+      document.getElementById("wIcon").className = `bi ${ICON_MAP[current.weather[0].icon] || "bi-cloud"} fs-3`;
+      document.getElementById("wFeels").textContent = `${Math.round(current.main.feels_like)}°C`;
+      document.getElementById("wHumidity").textContent = `${current.main.humidity}%`;
+      const windKmh = Math.round(current.wind.speed * 3.6);
+      const windDir = current.wind.deg != null ? compassFromDegrees(current.wind.deg) : "";
+      document.getElementById("wWind").textContent = `${windKmh} km/h ${windDir}`.trim();
+      document.getElementById("wVisibility").textContent = current.visibility != null ? `${(current.visibility / 1000).toFixed(1)} km` : "—";
+      document.getElementById("wxSourceLine").innerHTML = `<i class="bi bi-clock-history"></i> Updated ${new Date(current.dt * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} · Source: OpenWeatherMap`;
+
+      document.getElementById("wxLoading").classList.add("d-none");
+      document.getElementById("wxBody").classList.remove("d-none");
+      RainOffline.save("taalWeather", {
+        tempC: Math.round(current.main.temp), condition: current.weather[0].description,
+        feelsC: Math.round(current.main.feels_like), humidity: current.main.humidity,
+        windKmh, windDir, visibilityKm: current.visibility != null ? (current.visibility / 1000).toFixed(1) : null,
+      });
+    } catch (err) {
+      console.error(err);
+      const cached = RainOffline.load("taalWeather");
+      if (cached && !RainOffline.isOnline()) {
+        const w = cached.data;
+        document.getElementById("wTemp").textContent = `${w.tempC}°C`;
+        document.getElementById("wCondition").textContent = w.condition.replace(/\b\w/g, (c) => c.toUpperCase());
+        document.getElementById("wIcon").className = "bi bi-cloud fs-3";
+        document.getElementById("wFeels").textContent = `${w.feelsC}°C`;
+        document.getElementById("wHumidity").textContent = `${w.humidity}%`;
+        document.getElementById("wWind").textContent = `${w.windKmh} km/h ${w.windDir || ""}`.trim();
+        document.getElementById("wVisibility").textContent = w.visibilityKm != null ? `${w.visibilityKm} km` : "—";
+        document.getElementById("wxSourceLine").innerHTML = `<span class="cached-data-tag"><i class="bi bi-cloud-slash"></i> Saved data</span> Offline — showing reading saved ${RainOffline.timeAgo(cached.savedAt)}.`;
+        document.getElementById("wxLoading").classList.add("d-none");
+        document.getElementById("wxBody").classList.remove("d-none");
+      } else {
+        document.getElementById("wxLoading").classList.add("d-none");
+        document.getElementById("wxError").classList.remove("d-none");
+      }
+    }
+  }
+
+  async function initVolcanoPage() {
+    document.getElementById("app-content").appendChild(document.getElementById("volcano-content").content.cloneNode(true));
+
+    document.getElementById("wxRetry").addEventListener("click", () => {
+      const loc = window.__taalLoc || TAAL_FALLBACK;
+      loadWeather(loc.lat, loc.lng);
+    });
+
+    initializeAnimations();
+
+    const loc = await loadLocation();
+    window.__taalLoc = loc;
+    await loadWeather(loc.lat, loc.lng);
+  }
+
+  if (user) initVolcanoPage();
+</script>
+</body>
+</html>

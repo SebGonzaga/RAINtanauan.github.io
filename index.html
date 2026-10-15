@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>RAIN — AI-Powered Disaster Preparedness and Response Guidance</title>
+<meta name="description" content="RAIN helps Philippine communities monitor hazards, receive disaster alerts, and access AI-powered preparedness guidance." />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
+<link rel="stylesheet" href="assets/css/style.css">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0a1830">
+<link rel="apple-touch-icon" href="assets/icons/icon-192.png">
+</head>
+<body>
+
+<!-- PAGE LOADER — plays once, then opens outward from the raindrop -->
+<div class="rl-loader" aria-hidden="true">
+  <span class="rl-icon-wrap rl-icon-loader">
+    <svg viewBox="0 0 240 220">
+      <defs>
+        <radialGradient id="rlPinGradLoad" cx="40%" cy="30%" r="75%">
+          <stop offset="0%" stop-color="#c9f5f5"/>
+          <stop offset="45%" stop-color="#33c9d1"/>
+          <stop offset="100%" stop-color="#149b9b"/>
+        </radialGradient>
+        <linearGradient id="rlSweepGradLoad" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stop-color="#33c9d1" stop-opacity="0.5"/>
+          <stop offset="100%" stop-color="#33c9d1" stop-opacity="0"/>
+        </linearGradient>
+      </defs>
+      <g transform="translate(15,10)">
+        <circle class="rl-ring rl-ring4" cx="110" cy="95" r="100"/>
+        <circle class="rl-ring rl-ring1" cx="110" cy="95" r="80"/>
+        <circle class="rl-ring rl-ring2" cx="110" cy="95" r="60"/>
+        <circle class="rl-ring rl-ring3" cx="110" cy="95" r="40"/>
+        <g class="rl-sweep-group">
+          <path d="M110,95 L110,15 A80,80 0 0,1 178,133 Z" fill="url(#rlSweepGradLoad)"/>
+        </g>
+        <g class="rl-drop-intro">
+          <g class="rl-pin-group">
+            <g class="rl-pin-glow">
+              <path d="M0,-40 C22,-10 34,10 34,26 C34,45 19,58 0,58 C-19,58 -34,45 -34,26 C-34,10 -22,-10 0,-40 Z"
+                    fill="url(#rlPinGradLoad)" transform="translate(110,88.2) scale(0.755)"/>
+            </g>
+            <ellipse class="rl-pin-core" cx="102.5" cy="95.8" rx="4.5" ry="7.6" fill="#FFFFFF" opacity="0.35"/>
+          </g>
+        </g>
+      </g>
+    </svg>
+  </span>
+  <div class="rl-loader-word">RAIN</div>
+</div>
+
+<a href="#main" class="skip-link">Skip to content</a>
+
+<!-- NAVBAR -->
+<nav class="rain-navbar navbar navbar-expand-lg">
+  <div class="container">
+    <a class="navbar-brand" href="index.html">
+      <span class="rl-icon-wrap rl-icon-nav" aria-hidden="true">
+        <svg viewBox="0 0 240 220">
+          <defs>
+            <radialGradient id="rlPinGrad" cx="40%" cy="30%" r="75%">
+              <stop offset="0%" stop-color="#c9f5f5"/>
+              <stop offset="45%" stop-color="#33c9d1"/>
+              <stop offset="100%" stop-color="#149b9b"/>
+            </radialGradient>
+            <linearGradient id="rlSweepGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stop-color="#33c9d1" stop-opacity="0.5"/>
+              <stop offset="100%" stop-color="#33c9d1" stop-opacity="0"/>
+            </linearGradient>
+          </defs>
+          <g transform="translate(15,10)">
+            <circle class="rl-ring rl-ring1" cx="110" cy="95" r="80"/>
+            <circle class="rl-ring rl-ring2" cx="110" cy="95" r="60"/>
+            <circle class="rl-ring rl-ring3" cx="110" cy="95" r="40"/>
+
+            <g class="rl-sweep-group">
+              <path d="M110,95 L110,15 A80,80 0 0,1 178,133 Z" fill="url(#rlSweepGrad)"/>
+            </g>
+
+            <!-- volcano contact -->
+            <g class="rl-contact rl-volcano" transform="translate(167,45)">
+              <g class="rl-badge-enter rl-volcano-enter">
+                <circle class="rl-ping" r="10"/>
+                <g class="rl-contact-glow">
+                  <circle class="rl-contact-badge" r="10"/>
+                  <path class="rl-contact-glyph" d="M-5,4.5 L0,-5 L5,4.5 Z"/>
+                  <circle cx="0" cy="-5" r="1.3" fill="#ffd27a"/>
+                </g>
+              </g>
+            </g>
+
+            <!-- cloud contact -->
+            <g class="rl-contact rl-cloud" transform="translate(58,132)">
+              <g class="rl-badge-enter rl-cloud-enter">
+                <circle class="rl-ping" r="10"/>
+                <g class="rl-contact-glow">
+                  <circle class="rl-contact-badge" r="10"/>
+                  <ellipse class="rl-contact-glyph" cx="0" cy="2.2" rx="6" ry="2.6"/>
+                  <circle class="rl-contact-glyph" cx="-2.6" cy="-0.6" r="2.7"/>
+                  <circle class="rl-contact-glyph" cx="1.2" cy="-1.8" r="3.2"/>
+                  <circle class="rl-contact-glyph" cx="4.2" cy="-0.2" r="2.2"/>
+                </g>
+              </g>
+            </g>
+
+            <!-- earthquake contact -->
+            <g class="rl-contact rl-earthquake" transform="translate(75,75)">
+              <g class="rl-badge-enter rl-earthquake-enter">
+                <circle class="rl-ping" r="10"/>
+                <g class="rl-contact-glow">
+                  <circle class="rl-contact-badge" r="10"/>
+                  <path d="M-5,0 L-2.3,-3.3 L0,3.3 L2.3,-3.3 L5,0" fill="none" stroke="#c9f5f5" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+                </g>
+              </g>
+            </g>
+
+            <!-- raindrop -->
+            <g class="rl-drop-intro">
+              <g class="rl-pin-group">
+                <g class="rl-pin-glow">
+                  <path d="M0,-40 C22,-10 34,10 34,26 C34,45 19,58 0,58 C-19,58 -34,45 -34,26 C-34,10 -22,-10 0,-40 Z"
+                        fill="url(#rlPinGrad)" transform="translate(110,88.2) scale(0.755)"/>
+                </g>
+                <ellipse class="rl-pin-core" cx="102.5" cy="95.8" rx="4.5" ry="7.6" fill="#FFFFFF" opacity="0.35"/>
+              </g>
+            </g>
+          </g>
+        </svg>
+      </span>
+      RAIN
+    </a>
+    <button class="navbar-toggler border-0 text-white" type="button" data-bs-toggle="collapse" data-bs-target="#navMenu" aria-label="Toggle navigation">
+      <i class="bi bi-list fs-2 text-white bi-anim"></i>
+    </button>
+    <div class="collapse navbar-collapse" id="navMenu">
+      <ul class="navbar-nav ms-auto align-items-lg-center gap-lg-1">
+        <li class="nav-item"><a class="nav-link" href="#features">Features</a></li>
+        <li class="nav-item"><a class="nav-link" href="#monitoring">Monitoring</a></li>
+        <li class="nav-item"><a class="nav-link" href="#assistance">AI Assistance</a></li>
+        <li class="nav-item ms-lg-2"><a class="btn-rain btn-rain-outline btn-rain-sm" href="login.html">Sign In</a></li>
+        <li class="nav-item ms-lg-2"><a class="btn-rain btn-rain-primary btn-rain-sm" href="register.html">Get Started</a></li>
+      </ul>
+    </div>
+  </div>
+</nav>
+
+<main id="main">
+<!-- HERO -->
+<section class="rain-hero">
+  <div class="container position-relative">
+    <div class="row align-items-center g-5">
+      <div class="col-lg-7">
+        <div class="eyebrow mb-3">Philippine disaster monitoring network</div>
+        <h1 class="hero-title">RAIN</h1>
+        <div class="hero-subtitle">Risk Awareness &amp; Intelligent Network</div>
+        <p class="hero-desc">RAIN helps Philippine communities monitor weather and volcanic hazards, receive verified disaster alerts, find emergency contacts and evacuation centers, and get calm, practical guidance from an AI assistant trained on disaster-preparedness procedures.</p>
+        <div class="d-flex flex-wrap gap-3">
+          <a href="register.html" class="btn-rain btn-rain-primary hero-cta" data-press><i class="bi bi-arrow-right-circle dicon" data-dicon="arrow-right-circle"></i> Get Started</a>
+          <a href="login.html" class="btn-rain btn-rain-outline hero-cta" data-press><i class="bi bi-box-arrow-in-right dicon" data-dicon="box-arrow-in-right"></i> Sign In</a>
+        </div>
+        <div class="hero-stat-row">
+          <div class="hero-stat"><div class="num">6</div><div class="label">Volcanoes monitored</div></div>
+          <div class="hero-stat"><div class="num">24/7</div><div class="label">Alert monitoring</div></div>
+          <div class="hero-stat"><div class="num">EN / FIL</div><div class="label">AI assistance</div></div>
+        </div>
+      </div>
+      <div class="col-lg-5">
+        <div class="radar-wrap">
+          <span class="rl-icon-wrap rl-icon-hero">
+            <svg viewBox="0 0 240 220">
+              <defs>
+                <radialGradient id="rlPinGradHero" cx="40%" cy="30%" r="75%">
+                  <stop offset="0%" stop-color="#c9f5f5"/>
+                  <stop offset="45%" stop-color="#33c9d1"/>
+                  <stop offset="100%" stop-color="#149b9b"/>
+                </radialGradient>
+                <linearGradient id="rlSweepGradHero" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" stop-color="#33c9d1" stop-opacity="0.5"/>
+                  <stop offset="100%" stop-color="#33c9d1" stop-opacity="0"/>
+                </linearGradient>
+              </defs>
+              <g transform="translate(15,10)">
+                <circle class="rl-ring rl-ring1" cx="110" cy="95" r="80"/>
+                <circle class="rl-ring rl-ring2" cx="110" cy="95" r="60"/>
+                <circle class="rl-ring rl-ring3" cx="110" cy="95" r="40"/>
+
+                <g class="rl-sweep-group">
+                  <path d="M110,95 L110,15 A80,80 0 0,1 178,133 Z" fill="url(#rlSweepGradHero)"/>
+                </g>
+
+                <!-- volcano contact -->
+                <g class="rl-contact rl-volcano" transform="translate(167,45)">
+                  <g class="rl-badge-enter rl-volcano-enter">
+                    <circle class="rl-ping" r="10"/>
+                    <g class="rl-contact-glow">
+                      <circle class="rl-contact-badge" r="10"/>
+                      <path class="rl-contact-glyph" d="M-5,4.5 L0,-5 L5,4.5 Z"/>
+                      <circle cx="0" cy="-5" r="1.3" fill="#ffd27a"/>
+                    </g>
+                  </g>
+                </g>
+
+                <!-- cloud contact -->
+                <g class="rl-contact rl-cloud" transform="translate(58,132)">
+                  <g class="rl-badge-enter rl-cloud-enter">
+                    <circle class="rl-ping" r="10"/>
+                    <g class="rl-contact-glow">
+                      <circle class="rl-contact-badge" r="10"/>
+                      <ellipse class="rl-contact-glyph" cx="0" cy="2.2" rx="6" ry="2.6"/>
+                      <circle class="rl-contact-glyph" cx="-2.6" cy="-0.6" r="2.7"/>
+                      <circle class="rl-contact-glyph" cx="1.2" cy="-1.8" r="3.2"/>
+                      <circle class="rl-contact-glyph" cx="4.2" cy="-0.2" r="2.2"/>
+                    </g>
+                  </g>
+                </g>
+
+                <!-- earthquake contact -->
+                <g class="rl-contact rl-earthquake" transform="translate(75,75)">
+                  <g class="rl-badge-enter rl-earthquake-enter">
+                    <circle class="rl-ping" r="10"/>
+                    <g class="rl-contact-glow">
+                      <circle class="rl-contact-badge" r="10"/>
+                      <path d="M-5,0 L-2.3,-3.3 L0,3.3 L2.3,-3.3 L5,0" fill="none" class="rl-contact-glyph-stroke" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+                    </g>
+                  </g>
+                </g>
+
+                <!-- raindrop -->
+                <g class="rl-drop-intro">
+                  <g class="rl-pin-group">
+                    <g class="rl-pin-glow">
+                      <path d="M0,-40 C22,-10 34,10 34,26 C34,45 19,58 0,58 C-19,58 -34,45 -34,26 C-34,10 -22,-10 0,-40 Z"
+                            fill="url(#rlPinGradHero)" transform="translate(110,88.2) scale(0.755)"/>
+                    </g>
+                    <ellipse class="rl-pin-core" cx="102.5" cy="95.8" rx="4.5" ry="7.6" fill="#FFFFFF" opacity="0.35"/>
+                  </g>
+                </g>
+              </g>
+            </svg>
+          </span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- FEATURES -->
+<section class="section section-alt" id="features">
+  <div class="container">
+    <div class="section-heading mb-5">
+      <div class="eyebrow mb-2 text-cyan-deep">What RAIN monitors</div>
+      <h2>Five systems, one operations picture</h2>
+      <p class="text-muted-rain">Everything a resident needs before, during, and after a hazard event — built around official sources, not guesswork.</p>
+    </div>
+    <div class="row g-4">
+      <div class="col-md-6 col-lg-4">
+        <div class="feature-card reveal-on-scroll">
+          <div class="icon-badge tone-cyan"><i class="bi bi-cloud-sun dicon" data-dicon="cloud-sun"></i></div>
+          <h3>Weather Monitoring</h3>
+          <p>Live conditions, a 6-day forecast, temperature trend chart, and an interactive map — sourced from OpenWeatherMap with your location or any city you search.</p>
+        </div>
+      </div>
+      <div class="col-md-6 col-lg-4">
+        <div class="feature-card reveal-on-scroll">
+          <div class="icon-badge tone-orange"><i class="bi bi-triangle dicon" data-dicon="triangle"></i></div>
+          <h3>Volcano Monitoring</h3>
+          <p>Taal Volcano conditions and a reference alert level, with a link to the official PHIVOLCS advisory for the current level.</p>
+        </div>
+      </div>
+      <div class="col-md-6 col-lg-4">
+        <div class="feature-card reveal-on-scroll">
+          <div class="icon-badge tone-navy"><i class="bi bi-chat-dots dicon" data-dicon="chat-dots"></i></div>
+          <h3>AI Virtual Assistance</h3>
+          <p>Ask RAIN in English or Filipino for calm, practical guidance on earthquakes, typhoons, floods, and volcanic eruptions — never a replacement for emergency services.</p>
+        </div>
+      </div>
+      <div class="col-md-6 col-lg-4">
+        <div class="feature-card reveal-on-scroll">
+          <div class="icon-badge tone-red"><i class="bi bi-telephone dicon" data-dicon="telephone"></i></div>
+          <h3>Emergency Information</h3>
+          <p>One-tap emergency numbers and an evacuation-center map with distance from your location, so help is never more than a glance away.</p>
+        </div>
+      </div>
+      <div class="col-md-6 col-lg-4">
+        <div class="feature-card reveal-on-scroll">
+          <div class="icon-badge tone-yellow"><i class="bi bi-bell dicon" data-dicon="bell"></i></div>
+          <h3>Disaster Alerts</h3>
+          <p>Verified alerts pushed by LGU administrators, ranked by severity from Information to Critical, with the affected area always stated clearly.</p>
+        </div>
+      </div>
+      <div class="col-md-6 col-lg-4">
+        <div class="feature-card reveal-on-scroll">
+          <div class="icon-badge tone-green"><i class="bi bi-flag dicon" data-dicon="flag"></i></div>
+          <h3>Incident Reporting</h3>
+          <p>Residents can report ashfall, flooding, ground cracks, and other disaster-related incidents directly to disaster response officials, with photo and location.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- MONITORING PREVIEW -->
+<section class="section" id="monitoring">
+  <div class="container">
+    <div class="row align-items-center g-5">
+      <div class="col-lg-6">
+        <div class="eyebrow mb-2 text-cyan-deep">Real-time transparency</div>
+        <h2 class="mb-3 fs-heading-md">Every reading shows its source and timestamp</h2>
+        <p class="text-muted-rain mb-4">RAIN never presents information as live if it isn't. Weather data is sourced from OpenWeatherMap, the volcanic alert level is reference information (not a live feed), evacuation centers and emergency contacts come from the Tanauan City CDRRMO, and any development or demo data is clearly labeled — so residents and responders alike know exactly what they're looking at.</p>
+        <ul class="list-unstyled d-flex flex-column gap-3">
+          <li class="d-flex gap-2"><i class="bi bi-check-circle-fill text-safe dicon" data-dicon="check-circle-fill"></i> Source and "Last Updated" shown on every live component</li>
+          <li class="d-flex gap-2"><i class="bi bi-check-circle-fill text-safe dicon" data-dicon="check-circle-fill"></i> Clear DEMO DATA tags for development-stage content</li>
+          <li class="d-flex gap-2"><i class="bi bi-check-circle-fill text-safe dicon" data-dicon="check-circle-fill"></i> Offline mode shows the last known information, never fabricated updates</li>
+        </ul>
+      </div>
+      <div class="col-lg-6">
+        <div class="rain-card reveal-on-scroll">
+          <div class="card-eyebrow">
+            <span>Taal Volcano — Alert Level Reference</span>
+            <span class="status-badge status-caution"><span class="dot pulse-dot"></span>Level 1 (reference)</span>
+          </div>
+          <h3 class="card-num">Low-Level Unrest</h3>
+          <p class="text-muted-rain mb-0 fs-90">The entire Taal Volcano Island is a Permanent Danger Zone. This level is shown for context only; always check the official advisory for the current alert level.</p>
+          <div class="data-source-line"><i class="bi bi-clock-history dicon" data-dicon="clock-history"></i> Reference only, not a live feed · Check the current advisory at phivolcs.dost.gov.ph</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- AI ASSISTANCE PREVIEW -->
+<section class="section section-alt" id="assistance">
+  <div class="container">
+    <div class="row align-items-center g-5 flex-lg-row-reverse">
+      <div class="col-lg-6">
+        <div class="eyebrow mb-2 text-cyan-deep">Bilingual guidance</div>
+        <h2 class="mb-3 fs-heading-md">Ask RAIN — in English or Filipino</h2>
+        <p class="text-muted-rain mb-4">Virtual Assistance is built for real disaster questions: what to do during an earthquake, how to prepare for a typhoon, and where to find your nearest emergency contacts — always encouraging you to contact official responders for life-threatening emergencies.</p>
+        <a href="register.html" class="btn-rain btn-rain-ghost" data-press><i class="bi bi-chat-dots dicon" data-dicon="chat-dots"></i> Try Virtual Assistance</a>
+      </div>
+      <div class="col-lg-6">
+        <div class="rain-card reveal-on-scroll p-card-sm">
+          <div class="chat-msg assistant mb-3">
+            <div class="chat-avatar assistant">AI</div>
+            <div class="bubble">Ano ang dapat gawin kapag may lindol? Sundin ang Duck, Cover, at Hold — pumasok sa ilalim ng matibay na mesa at lumayo sa bintana.</div>
+          </div>
+          <div class="chat-msg user">
+            <div class="chat-avatar user">You</div>
+            <div class="bubble">What about typhoon preparation?</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CTA -->
+<section class="section">
+  <div class="container">
+    <div class="rain-card reveal-on-scroll text-center py-5 cta-card-dark">
+      <h2 class="text-white mb-3 fs-heading-md">Prepared communities respond faster.</h2>
+      <p class="mb-4 text-white-70 max-w-520">Create a free RAIN account to start monitoring hazards in your area today.</p>
+      <a href="register.html" class="btn-rain btn-rain-primary" data-press><i class="bi bi-arrow-right-circle dicon" data-dicon="arrow-right-circle"></i> Get Started</a>
+    </div>
+  </div>
+</section>
+</main>
+
+<!-- FOOTER -->
+<footer class="rain-footer">
+  <div class="container">
+    <div class="row g-4">
+      <div class="col-md-4">
+        <h5><span class="brand-mark d-inline-flex brand-mark-sm">R</span>AIN</h5>
+        <p class="max-w-280">AI-Powered Disaster Preparedness and Response Guidance for Philippine communities.</p>
+      </div>
+      <div class="col-6 col-md-2">
+        <h5 class="fs-95">Product</h5>
+        <ul class="list-unstyled d-flex flex-column gap-2">
+          <li><a href="#features">Features</a></li>
+          <li><a href="login.html">Sign In</a></li>
+          <li><a href="register.html">Register</a></li>
+        </ul>
+      </div>
+      <div class="col-6 col-md-3">
+        <h5 class="fs-95">Data sources</h5>
+        <ul class="list-unstyled d-flex flex-column gap-2">
+          <li>OpenWeatherMap</li>
+          <li>USGS Earthquake Catalog</li>
+          <li>Tanauan City CDRRMO</li>
+        </ul>
+      </div>
+      <div class="col-md-3">
+        <h5 class="fs-95">Emergency</h5>
+        <ul class="list-unstyled d-flex flex-column gap-2">
+          <li>Police — 117</li>
+          <li>Fire — 160</li>
+          <li>Medical — 911</li>
+        </ul>
+      </div>
+    </div>
+    <hr>
+    <div class="d-flex flex-wrap justify-content-between gap-2">
+      <span>© <span id="footerYear"></span> RAIN. Academic capstone research prototype.</span>
+      <span>Built for Philippine disaster resilience.</span>
+    </div>
+  </div>
+</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/animejs@4.5.0/lib/anime.iife.min.js"></script>
+<script src="assets/js/animations.js"></script>
+<script src="assets/js/icons.js"></script>
+<script src="assets/js/offline-store.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="assets/js/supabase-client.js"></script>
+<script src="assets/js/rain-auth.js"></script>
+<script src="assets/js/main.js"></script>
+<script>
+  document.addEventListener("DOMContentLoaded", () => {
+    RainAnim.animatePageEntrance();
+    RainAnim.initScrollReveal(".reveal-on-scroll");
+  });
+</script>
+<script type="module">
+  // If the visitor already has an active session, skip the marketing
+  // landing page and take them straight to their dashboard — but let the
+  // splash (.rl-loader) play its intro (icon settle + "RAIN" wordmark)
+  // for a beat first, instead of yanking them away before it's visible.
+  const SPLASH_MIN_MS = 1600; // ~icon settle (1.05s) + word fade-in (finishes 2.15s)
+  const pageLoadStart = performance.now();
+
+  (async () => {
+    const existingUser = await RainAuth.init();
+    if (!existingUser) return;
+
+    const elapsed = performance.now() - pageLoadStart;
+    const remaining = Math.max(0, SPLASH_MIN_MS - elapsed);
+    setTimeout(() => {
+      window.location.replace(RainAuth.isAdmin(existingUser) ? "admin-dashboard.html" : "dashboard.html");
+    }, remaining);
+  })();
+</script>
+</body>
+</html>

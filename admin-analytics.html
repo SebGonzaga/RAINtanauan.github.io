@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script>(function(){try{var t=localStorage.getItem("rain_theme")||"dark";document.documentElement.setAttribute("data-theme",t);}catch(e){}})();</script>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Analytics — RAIN</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
+<link rel="stylesheet" href="assets/css/style.css">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0a1830">
+<link rel="apple-touch-icon" href="assets/icons/icon-192.png">
+</head>
+<body>
+<div id="app-shell-root"></div>
+
+<template id="admin-analytics-content">
+  <div class="mb-4">
+    <span class="eyebrow">Operations Analytics</span>
+    <h1 style="font-family:var(--font-display); font-weight:700; font-size:1.4rem; color:var(--canvas-heading); margin:.25rem 0 0;">System-wide insights</h1>
+  </div>
+
+  <div class="row g-4 mb-4">
+    <div class="col-lg-6">
+      <div class="rain-card reveal-on-scroll">
+        <div class="card-eyebrow"><span>Incidents by type</span><span class="cell-muted" id="incTotalLabel"></span></div>
+        <canvas id="incTypeChart" height="220"></canvas>
+      </div>
+    </div>
+    <div class="col-lg-6">
+      <div class="rain-card reveal-on-scroll">
+        <div class="card-eyebrow"><span>Incident status</span></div>
+        <canvas id="incStatusChart" height="220"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <div class="row g-4 mb-4">
+    <div class="col-lg-6">
+      <div class="rain-card reveal-on-scroll">
+        <div class="card-eyebrow"><span>Alerts by severity</span></div>
+        <canvas id="alertSeverityChart" height="220"></canvas>
+      </div>
+    </div>
+    <div class="col-lg-6">
+      <div class="rain-card reveal-on-scroll">
+        <div class="card-eyebrow"><span>Registered accounts</span></div>
+        <canvas id="userRoleChart" height="220"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <div class="row g-4 mb-4">
+    <div class="col-12">
+      <div class="rain-card reveal-on-scroll">
+        <div class="card-eyebrow"><span>Users by location</span><span class="cell-muted" id="userLocationTotalLabel"></span></div>
+        <div id="userLocationChartWrap" style="position:relative;">
+          <canvas id="userLocationChart"></canvas>
+        </div>
+        <div class="d-flex flex-wrap gap-3 mt-3" style="font-size:.78rem;">
+          <span class="text-muted-rain"><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:#e8703a;margin-right:.35rem;"></span>Near Taal Volcano</span>
+          <span class="text-muted-rain"><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:#33c9d1;margin-right:.35rem;"></span>Laguna / Calamba area</span>
+          <span class="text-muted-rain"><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:#2c5581;margin-right:.35rem;"></span>Other (typed manually)</span>
+          <span class="text-muted-rain"><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:#8a94a6;margin-right:.35rem;"></span>Not set</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="rain-card reveal-on-scroll">
+    <div class="card-eyebrow"><span>Chatbot usage trend</span></div>
+    <p class="text-muted-rain mb-3" style="font-size:.85rem;">Conversation volume is not yet logged server-side, so this trend is illustrative until the PHP + MySQL backend (spec §27–33) tracks real Virtual Assistance sessions.</p>
+    <canvas id="chatTrendChart" height="160"></canvas>
+  </div>
+</template>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/animejs@4.5.0/lib/anime.iife.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<script src="assets/js/animations.js"></script>
+<script src="assets/js/demo-data.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="assets/js/supabase-client.js"></script>
+<script src="assets/js/rain-auth.js"></script>
+<script src="assets/js/offline-store.js"></script>
+<script src="assets/js/main.js"></script>
+<script src="assets/js/taal-places.js"></script>
+<script type="module">
+  await RainAuth.init();
+  const user = renderAppShell("admin-analytics.html", { title: "Analytics" });
+  if (user && !RainAuth.isAdmin(user)) { window.location.href = "dashboard.html"; }
+
+  // UI shows "Pending / Reviewed / Resolved"; the DB enum (see
+  // supabase/schema.sql) uses "pending / verified / resolved / dismissed".
+  // Same mapping as admin-incidents.html.
+  const STATUS_DB_TO_UI = { pending: "Pending", verified: "Reviewed", resolved: "Resolved", dismissed: "Dismissed" };
+
+  async function initAdminAnalyticsPage() {
+    document.getElementById("app-content").appendChild(document.getElementById("admin-analytics-content").content.cloneNode(true));
+    initializeAnimations();
+
+    const [incidentsRes, alertsRes, usersRes, chatLogsRes] = await Promise.all([
+      sb.from("incidents").select("category, status"),
+      sb.from("alerts").select("severity"),
+      sb.from("profiles").select("role, barangay"),
+      sb.from("chat_logs").select("created_at"),
+    ]);
+    if (incidentsRes.error) console.error("Fetch incidents error:", incidentsRes.error);
+    if (alertsRes.error) console.error("Fetch alerts error:", alertsRes.error);
+    if (usersRes.error) console.error("Fetch profiles error:", usersRes.error);
+    if (chatLogsRes.error) console.error("Fetch chat logs error:", chatLogsRes.error);
+    const incidents = incidentsRes.data || [];
+    const alerts = alertsRes.data || [];
+    const users = usersRes.data || [];
+    document.getElementById("incTotalLabel").textContent = incidents.length + " total";
+
+    const palette = ["#33c9d1", "#e8703a", "#e0a92a", "#d8394a", "#1f9d7c", "#2c5581"];
+
+    const byType = {};
+    incidents.forEach((i) => { const t = i.category || "Other"; byType[t] = (byType[t] || 0) + 1; });
+    new Chart(document.getElementById("incTypeChart"), {
+      type: "doughnut",
+      data: { labels: Object.keys(byType).length ? Object.keys(byType) : ["No reports yet"], datasets: [{ data: Object.keys(byType).length ? Object.values(byType) : [1], backgroundColor: palette, borderWidth: 0 }] },
+      options: { plugins: { legend: { position: "bottom", labels: { boxWidth: 10, font: { size: 11 } } } } },
+    });
+
+    const statuses = ["Pending", "Reviewed", "Resolved"];
+    const byStatus = statuses.map((s) => incidents.filter((i) => STATUS_DB_TO_UI[i.status] === s).length);
+    new Chart(document.getElementById("incStatusChart"), {
+      type: "bar",
+      data: { labels: statuses, datasets: [{ data: byStatus, backgroundColor: ["#e0a92a", "#33c9d1", "#1f9d7c"], borderRadius: 6 }] },
+      options: { plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { precision: 0 } } } },
+    });
+
+    const severities = ["information", "advisory", "warning", "critical"];
+    const bySeverity = severities.map((s) => alerts.filter((a) => a.severity === s).length);
+    new Chart(document.getElementById("alertSeverityChart"), {
+      type: "bar",
+      data: { labels: ["Information", "Advisory", "Warning", "Critical"], datasets: [{ data: bySeverity, backgroundColor: ["#3f8cf3", "#e0a92a", "#e8703a", "#d8394a"], borderRadius: 6 }] },
+      options: { indexAxis: "y", plugins: { legend: { display: false } }, scales: { x: { beginAtZero: true, ticks: { precision: 0 } } } },
+    });
+
+    const admins = users.filter((u) => u.role === "admin").length;
+    const residents = users.filter((u) => u.role === "resident").length;
+    new Chart(document.getElementById("userRoleChart"), {
+      type: "doughnut",
+      data: { labels: ["Administrators", "Community Residents"], datasets: [{ data: [admins, residents], backgroundColor: ["#e8703a", "#33c9d1"], borderWidth: 0 }] },
+      options: { plugins: { legend: { position: "bottom", labels: { boxWidth: 10, font: { size: 11 } } } } },
+    });
+
+    // Where users live — grouped by the City/Municipality picked at
+    // registration (see register.html / profile.html + taal-places.js).
+    // Bars are colored by region so it's easy to see, at a glance, how many
+    // registered residents sit inside Taal's immediate vicinity vs. the
+    // Laguna/Calamba side of RAIN's coverage area.
+    const REGION_COLORS = { "Near Taal Volcano": "#e8703a", "Laguna / Calamba Area": "#33c9d1" };
+    const OTHER_COLOR = "#2c5581";
+    const UNSET_COLOR = "#8a94a6";
+    const placeGroupByName = {};
+    TaalPlaces.PLACES.forEach((p) => { placeGroupByName[p.name] = p.group; });
+
+    const byCity = {};
+    users.forEach((u) => {
+      const c = (u.barangay || "").trim() || "Not set";
+      byCity[c] = (byCity[c] || 0) + 1;
+    });
+    const cityEntries = Object.entries(byCity).sort((a, b) => b[1] - a[1]);
+    const cityLabels = cityEntries.map(([name]) => name);
+    const cityCounts = cityEntries.map(([, count]) => count);
+    const cityColors = cityEntries.map(([name]) => {
+      if (name === "Not set") return UNSET_COLOR;
+      return REGION_COLORS[placeGroupByName[name]] || OTHER_COLOR;
+    });
+
+    document.getElementById("userLocationTotalLabel").textContent = users.length + " total";
+    // Give the chart enough vertical room regardless of how many distinct
+    // cities show up, so labels don't get squeezed together.
+    document.getElementById("userLocationChartWrap").style.height =
+      Math.max(220, cityLabels.length * 36) + "px";
+    new Chart(document.getElementById("userLocationChart"), {
+      type: "bar",
+      data: {
+        labels: cityLabels.length ? cityLabels : ["No accounts yet"],
+        datasets: [{ data: cityCounts.length ? cityCounts : [1], backgroundColor: cityColors.length ? cityColors : [UNSET_COLOR], borderRadius: 6, maxBarThickness: 22 }],
+      },
+      options: {
+        indexAxis: "y",
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: { x: { beginAtZero: true, ticks: { precision: 0 } } },
+      },
+    });
+
+    // Buckets rows by calendar month over the last N months — same
+    // helper as admin-dashboard.html.
+    function countByMonth(rows, months) {
+      const buckets = [];
+      const now = new Date();
+      for (let i = months - 1; i >= 0; i--) {
+        const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+        buckets.push({ key: `${d.getFullYear()}-${d.getMonth()}`, label: d.toLocaleString([], { month: "short" }), count: 0 });
+      }
+      (rows || []).forEach((r) => {
+        const d = new Date(r.created_at);
+        const key = `${d.getFullYear()}-${d.getMonth()}`;
+        const bucket = buckets.find((b) => b.key === key);
+        if (bucket) bucket.count++;
+      });
+      return buckets;
+    }
+    const chatBuckets = countByMonth(chatLogsRes.data, 6);
+    new Chart(document.getElementById("chatTrendChart"), {
+      type: "line",
+      data: { labels: chatBuckets.map((b) => b.label), datasets: [{ label: "Conversations", data: chatBuckets.map((b) => b.count), borderColor:"#2c5581", backgroundColor:"rgba(44,85,129,.12)", fill:true, tension:.35 }] },
+      options: { plugins: { legend: { display:false } }, scales: { y: { beginAtZero: true, ticks: { precision: 0 } } } },
+    });
+  }
+
+  if (user && RainAuth.isAdmin(user)) initAdminAnalyticsPage();
+</script>
+</body>
+</html>

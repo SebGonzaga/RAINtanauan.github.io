@@ -1,0 +1,12 @@
+{
+  "name": "rain",
+  "private": true,
+  "version": "1.0.0",
+  "description": "RAIN -- Vercel serverless functions. api/notifications.js depends on nodemailer; api/chat.js and api/weather.js use plain fetch(). Shared chat-assistant code lives in api/_lib (not deployed as routes).",
+  "dependencies": {
+    "nodemailer": "^6.9.14"
+  },
+  "scripts": {
+    "test": "node --test \"tests/*.test.mjs\""
+  }
+}

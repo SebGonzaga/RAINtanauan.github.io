@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script>(function(){try{var t=localStorage.getItem("rain_theme")||"dark";document.documentElement.setAttribute("data-theme",t);}catch(e){}})();</script>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Manage Alerts — RAIN</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
+<link rel="stylesheet" href="assets/css/style.css">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0a1830">
+<link rel="apple-touch-icon" href="assets/icons/icon-192.png">
+</head>
+<body>
+<div id="app-shell-root"></div>
+
+<template id="admin-alerts-content">
+  <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-4">
+    <div>
+      <span class="eyebrow">Disaster Alerts</span>
+      <h1 style="font-family:var(--font-display); font-weight:700; font-size:1.4rem; color:var(--canvas-heading); margin:.25rem 0 0;">Publish &amp; manage alerts</h1>
+    </div>
+    <button type="button" class="btn-rain btn-rain-primary" id="newAlertBtn" data-press><i class="bi bi-plus-circle dicon" data-dicon="plus-circle"></i> New Alert</button>
+  </div>
+
+  <div id="alertFormSuccess" class="alert-banner level-info mb-3 d-none" style="opacity:1;">
+    <i class="bi bi-check-circle icon dicon" data-dicon="check-circle"></i><div>Alert saved. Residents will see it on their Alerts page and Live Situation Map immediately.</div>
+  </div>
+
+  <div class="rain-card reveal-on-scroll">
+    <div class="card-eyebrow"><span>All published alerts</span><span class="cell-muted" id="alertsCount"></span></div>
+    <div class="table-rain-wrap cards-on-mobile">
+      <table class="table-rain">
+        <thead>
+          <tr>
+            <th>Title</th>
+            <th>Type</th>
+            <th>Severity</th>
+            <th>Area</th>
+            <th>Published</th>
+            <th>Expires</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="alertsTableBody"></tbody>
+      </table>
+    </div>
+    <div class="empty-state d-none" id="alertsEmpty">
+      <div class="glyph"><i class="bi bi-bell-slash dicon" data-dicon="bell-slash"></i></div>
+      <div>No alerts published yet.</div>
+    </div>
+  </div>
+</template>
+
+<!-- New / edit alert modal -->
+<div class="modal fade modal-rain" id="alertModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-fullscreen-sm-down">
+    <div class="modal-content p-2">
+      <div class="modal-header border-0">
+        <h5 class="modal-title" id="alertModalTitle" style="font-weight:700; color:var(--navy-950);">New Alert</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <form id="alertForm">
+        <div class="modal-body">
+          <input type="hidden" id="alertId">
+          <div class="mb-3">
+            <label class="form-label-rain" for="alertTitle">Title</label>
+            <input type="text" class="form-control form-control-rain" id="alertTitle" required placeholder="e.g. Severe Wind and Rainfall Advisory">
+          </div>
+          <div class="row g-3">
+            <div class="col-12 col-sm-6">
+              <label class="form-label-rain" for="alertType">Type</label>
+              <select class="form-select form-control-rain" id="alertType" required>
+                <option>Typhoon</option>
+                <option>Volcanic</option>
+                <option>Flood</option>
+                <option>Earthquake</option>
+                <option>Landslide</option>
+                <option>General Emergency</option>
+              </select>
+            </div>
+            <div class="col-12 col-sm-6">
+              <label class="form-label-rain" for="alertSeverity">Severity</label>
+              <select class="form-select form-control-rain" id="alertSeverity" required>
+                <option value="information">Information</option>
+                <option value="advisory">Advisory</option>
+                <option value="warning">Warning</option>
+                <option value="critical">Critical</option>
+              </select>
+            </div>
+          </div>
+          <div class="mb-3 mt-3">
+            <label class="form-label-rain" for="alertArea">Affected area</label>
+            <input type="text" class="form-control form-control-rain" id="alertArea" required placeholder="e.g. Brgy. Poblacion, Tanauan City, Batangas">
+          </div>
+          <div class="row g-3">
+            <div class="col-12 col-sm-6">
+              <label class="form-label-rain" for="alertLat">Latitude</label>
+              <input type="number" step="any" class="form-control form-control-rain" id="alertLat" required placeholder="14.0863">
+            </div>
+            <div class="col-12 col-sm-6">
+              <label class="form-label-rain" for="alertLng">Longitude</label>
+              <input type="number" step="any" class="form-control form-control-rain" id="alertLng" required placeholder="121.1497">
+            </div>
+          </div>
+          <div class="d-flex align-items-center gap-2 mt-2">
+            <button type="button" class="btn-rain btn-rain-ghost btn-rain-sm" id="useMyLocationBtn"><i class="bi bi-geo-alt dicon" data-dicon="geo-alt"></i> Use my location</button>
+            <span class="text-muted-rain" style="font-size:.8rem;" id="geoStatus"></span>
+          </div>
+          <div class="mb-3 mt-3">
+            <label class="form-label-rain" for="alertMessage">Message</label>
+            <textarea class="form-control form-control-rain" id="alertMessage" rows="3" required placeholder="Details residents should act on..."></textarea>
+          </div>
+          <div class="row g-3">
+            <div class="col-12 col-sm-6">
+              <label class="form-label-rain" for="alertStart">Start</label>
+              <input type="datetime-local" class="form-control form-control-rain" id="alertStart" required>
+            </div>
+            <div class="col-12 col-sm-6">
+              <label class="form-label-rain" for="alertExpires">Expires</label>
+              <input type="datetime-local" class="form-control form-control-rain" id="alertExpires" required>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer border-0">
+          <button type="button" class="btn-rain btn-rain-ghost btn-rain-sm" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn-rain btn-rain-primary btn-rain-sm"><i class="bi bi-check-circle dicon" data-dicon="check-circle"></i> Save Alert</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/animejs@4.5.0/lib/anime.iife.min.js"></script>
+<script src="assets/js/animations.js"></script>
+<script src="assets/js/icons.js"></script>
+<script src="assets/js/demo-data.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="assets/js/supabase-client.js"></script>
+<script src="assets/js/rain-auth.js"></script>
+<script src="assets/js/offline-store.js"></script>
+<script src="assets/js/main.js"></script>
+<script type="module">
+  await RainAuth.init();
+  const user = renderAppShell("admin-alerts.html", { title: "Manage Alerts" });
+  if (user && !RainAuth.isAdmin(user)) { window.location.href = "dashboard.html"; }
+
+  const severityBadge = { information: "status-safe", advisory: "status-caution", warning: "status-warning", critical: "status-critical" };
+
+  function fmt(ts) {
+    if (!ts) return "—";
+    const d = new Date(ts);
+    return isNaN(d) ? ts : d.toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+  }
+
+  // Local cache of the last fetch, so openForEdit() doesn't need a round
+  // trip — refreshed every time renderAlertsTable() runs.
+  let alertsCache = [];
+
+  async function fetchAlerts() {
+    const { data, error } = await sb.from("alerts").select("*").order("created_at", { ascending: false });
+    if (error) { console.error("Fetch alerts error:", error); return []; }
+    return data;
+  }
+
+  async function renderAlertsTable() {
+    alertsCache = await fetchAlerts();
+    const body = document.getElementById("alertsTableBody");
+    const empty = document.getElementById("alertsEmpty");
+    document.getElementById("alertsCount").textContent = alertsCache.length + " total";
+    body.innerHTML = "";
+    empty.classList.toggle("d-none", alertsCache.length > 0);
+    alertsCache.forEach((a) => {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td data-label="Title"><strong>${a.title}</strong></td>
+        <td data-label="Type">${a.type}</td>
+        <td data-label="Severity"><span class="status-badge ${severityBadge[a.severity] || "status-caution"} ${a.severity === "critical" ? "badge-live" : ""}">${a.severity}</span></td>
+        <td data-label="Area" class="cell-muted">${a.area}</td>
+        <td data-label="Published" class="cell-muted">${fmt(a.created_at)}</td>
+        <td data-label="Expires" class="cell-muted">${a.expires_at ? fmt(a.expires_at) : "—"}</td>
+        <td class="text-end row-actions">
+          <button type="button" class="icon-btn-rain me-1" data-edit="${a.id}" aria-label="Edit alert"><i class="bi bi-pencil"></i></button>
+          <button type="button" class="icon-btn-rain danger" data-delete="${a.id}" aria-label="Delete alert"><i class="bi bi-trash3"></i></button>
+        </td>`;
+      body.appendChild(tr);
+    });
+  }
+
+  function initAdminAlertsPage() {
+    document.getElementById("app-content").appendChild(document.getElementById("admin-alerts-content").content.cloneNode(true));
+    initializeAnimations();
+    renderAlertsTable();
+
+    const modalEl = document.getElementById("alertModal");
+    const modal = new bootstrap.Modal(modalEl);
+    const form = document.getElementById("alertForm");
+    const areaInput = document.getElementById("alertArea");
+    const latInput = document.getElementById("alertLat");
+    const lngInput = document.getElementById("alertLng");
+    const geoStatus = document.getElementById("geoStatus");
+    const useMyLocationBtn = document.getElementById("useMyLocationBtn");
+
+    // Coords only auto-fill if the admin hasn't typed their own yet, so we
+    // never clobber a manual edit.
+    function coordsAreEmpty() {
+      return !latInput.value.trim() && !lngInput.value.trim();
+    }
+
+    function setGeoStatus(msg, isError) {
+      geoStatus.textContent = msg;
+      geoStatus.style.color = isError ? "var(--status-critical, #d9534f)" : "";
+    }
+
+    let geocodeTimer;
+    areaInput.addEventListener("input", () => {
+      clearTimeout(geocodeTimer);
+      if (!areaInput.value.trim() || !coordsAreEmpty()) return;
+      geocodeTimer = setTimeout(() => geocodeArea(areaInput.value.trim()), 700);
+    });
+
+    async function geocodeArea(query) {
+      setGeoStatus("Looking up coordinates…");
+      try {
+        const url = "https://nominatim.openstreetmap.org/search?format=json&limit=1&q=" + encodeURIComponent(query + ", Philippines");
+        const res = await fetch(url, { headers: { "Accept": "application/json" } });
+        const results = await res.json();
+        if (!coordsAreEmpty()) { setGeoStatus(""); return; } // admin typed while we waited
+        if (results && results.length) {
+          latInput.value = parseFloat(results[0].lat).toFixed(4);
+          lngInput.value = parseFloat(results[0].lon).toFixed(4);
+          setGeoStatus("Coordinates found for \"" + query + "\". You can adjust them if needed.");
+        } else {
+          setGeoStatus("No match found for that area — enter coordinates manually.", true);
+        }
+      } catch (err) {
+        console.error("Geocode error:", err);
+        setGeoStatus("Couldn't look up coordinates — enter them manually.", true);
+      }
+    }
+
+    useMyLocationBtn.addEventListener("click", () => {
+      if (!navigator.geolocation) {
+        setGeoStatus("Geolocation isn't supported in this browser.", true);
+        return;
+      }
+      setGeoStatus("Getting your current location…");
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          latInput.value = pos.coords.latitude.toFixed(4);
+          lngInput.value = pos.coords.longitude.toFixed(4);
+          setGeoStatus("Using your current location. Adjust if the alert covers a different area.");
+        },
+        (err) => {
+          console.error("Geolocation error:", err);
+          setGeoStatus("Couldn't get your location — enter coordinates manually.", true);
+        },
+        { enableHighAccuracy: true, timeout: 8000 }
+      );
+    });
+
+    function openForCreate() {
+      form.reset();
+      document.getElementById("alertId").value = "";
+      document.getElementById("alertModalTitle").textContent = "New Alert";
+      setGeoStatus("");
+      const now = new Date();
+      const soon = new Date(now.getTime() + 2 * 24 * 3600 * 1000);
+      document.getElementById("alertStart").value = now.toISOString().slice(0, 16);
+      document.getElementById("alertExpires").value = soon.toISOString().slice(0, 16);
+      modal.show();
+    }
+
+    function openForEdit(id) {
+      const a = alertsCache.find((x) => x.id === id);
+      if (!a) return;
+      document.getElementById("alertId").value = a.id;
+      document.getElementById("alertModalTitle").textContent = "Edit Alert";
+      document.getElementById("alertTitle").value = a.title || "";
+      document.getElementById("alertType").value = a.type || "Typhoon";
+      document.getElementById("alertSeverity").value = a.severity || "advisory";
+      document.getElementById("alertArea").value = a.area || "";
+      document.getElementById("alertLat").value = a.lat ?? "";
+      document.getElementById("alertLng").value = a.lng ?? "";
+      document.getElementById("alertMessage").value = a.message || "";
+      document.getElementById("alertStart").value = a.starts_at ? a.starts_at.slice(0, 16) : "";
+      document.getElementById("alertExpires").value = a.expires_at ? a.expires_at.slice(0, 16) : "";
+      setGeoStatus("");
+      modal.show();
+    }
+
+    document.getElementById("newAlertBtn").addEventListener("click", openForCreate);
+
+    document.getElementById("alertsTableBody").addEventListener("click", async (e) => {
+      const editBtn = e.target.closest("[data-edit]");
+      const delBtn = e.target.closest("[data-delete]");
+      if (editBtn) openForEdit(editBtn.dataset.edit);
+      if (delBtn) {
+        if (confirm("Delete this alert? Residents will stop seeing it immediately.")) {
+          const { error } = await sb.from("alerts").delete().eq("id", delBtn.dataset.delete);
+          if (error) { console.error("Delete alert error:", error); rainToast("Could not delete alert", "bi-exclamation-triangle"); return; }
+          renderAlertsTable();
+          rainToast("Alert deleted", "bi-trash3");
+        }
+      }
+    });
+
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const id = document.getElementById("alertId").value;
+      const payload = {
+        title: document.getElementById("alertTitle").value.trim(),
+        type: document.getElementById("alertType").value,
+        severity: document.getElementById("alertSeverity").value,
+        area: document.getElementById("alertArea").value.trim(),
+        lat: parseFloat(document.getElementById("alertLat").value),
+        lng: parseFloat(document.getElementById("alertLng").value),
+        message: document.getElementById("alertMessage").value.trim(),
+        starts_at: new Date(document.getElementById("alertStart").value).toISOString(),
+        expires_at: new Date(document.getElementById("alertExpires").value).toISOString(),
+      };
+
+      let error;
+      if (id) {
+        ({ error } = await sb.from("alerts").update(payload).eq("id", id));
+      } else {
+        ({ error } = await sb.from("alerts").insert({ ...payload, created_by: user.id }));
+      }
+
+      if (error) {
+        console.error("Save alert error:", error);
+        rainToast("Could not save alert", "bi-exclamation-triangle");
+        return;
+      }
+
+      rainToast(id ? "Alert updated" : "Alert published", "bi-check-circle");
+      modal.hide();
+      renderAlertsTable();
+      const success = document.getElementById("alertFormSuccess");
+      success.classList.remove("d-none");
+      RainAnim.animateAlertBanner(success);
+      setTimeout(() => success.classList.add("d-none"), 3500);
+    });
+  }
+
+  if (user && RainAuth.isAdmin(user)) initAdminAlertsPage();
+</script>
+</body>
+</html>

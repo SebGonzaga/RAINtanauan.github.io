@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script>(function(){try{var t=localStorage.getItem("rain_theme")||"dark";document.documentElement.setAttribute("data-theme",t);}catch(e){}})();</script>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Earthquake — RAIN</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="stylesheet" href="assets/css/style.css">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0a1830">
+<link rel="apple-touch-icon" href="assets/icons/icon-192.png">
+</head>
+<body>
+<div id="app-shell-root"></div>
+
+<template id="earthquake-content">
+  <div class="alert-banner level-advisory mb-4">
+    <i class="bi bi-info-circle icon dicon" data-dicon="info-circle"></i>
+    <div style="font-size:.86rem;">
+      Live data from the <strong>USGS</strong> earthquake feed — free, no API key needed, updated every few minutes.
+      <strong>PHIVOLCS</strong> is the official source for Philippine seismic bulletins and intensity reports, but doesn't
+      publish a public API, so this page can't pull directly from them. Always check
+      <a href="https://earthquake.phivolcs.dost.gov.ph/" target="_blank" rel="noopener" style="font-weight:600;">PHIVOLCS' earthquake bulletin</a>
+      for official intensity and advisories.
+    </div>
+  </div>
+
+  <div class="d-flex flex-wrap gap-2 justify-content-between align-items-center mb-4">
+    <div class="d-flex flex-wrap gap-2" id="quakeFilters">
+      <select class="form-select form-control-rain" id="quakeWindow" style="width:auto;">
+        <option value="1">Past 24 hours</option>
+        <option value="7" selected>Past 7 days</option>
+        <option value="30">Past 30 days</option>
+      </select>
+      <select class="form-select form-control-rain" id="quakeMinMag" style="width:auto;">
+        <option value="1.5">M1.5+</option>
+        <option value="2.5" selected>M2.5+</option>
+        <option value="4.5">M4.5+</option>
+      </select>
+    </div>
+    <button class="btn-rain btn-rain-ghost btn-rain-sm" id="quakeRefreshBtn" data-press><i class="bi bi-arrow-clockwise dicon" data-dicon="arrow-clockwise"></i> Refresh</button>
+  </div>
+
+  <div id="quakeSkeleton" aria-live="polite" aria-label="Loading earthquake data">
+    <div class="row g-4 mb-4">
+      <div class="col-lg-5">
+        <div class="rain-card h-100">
+          <span class="skeleton d-block mb-3" style="width:45%; height:14px;"></span>
+          <span class="skeleton d-block mb-3" style="width:55%; height:2.4rem;"></span>
+          <span class="skeleton d-block" style="width:70%; height:16px;"></span>
+        </div>
+      </div>
+      <div class="col-lg-7">
+        <div class="rain-card h-100">
+          <span class="skeleton d-block mb-3" style="width:35%; height:14px;"></span>
+          <span class="skeleton d-block" style="height:220px;"></span>
+        </div>
+      </div>
+    </div>
+    <div class="rain-card">
+      <span class="skeleton d-block mb-3" style="width:30%; height:14px;"></span>
+      <span class="skeleton d-block mb-2" style="height:56px;"></span>
+      <span class="skeleton d-block mb-2" style="height:56px;"></span>
+      <span class="skeleton d-block" style="height:56px;"></span>
+    </div>
+  </div>
+
+  <div id="quakeError" class="error-state d-none">
+    <div class="glyph"><i class="bi bi-exclamation-octagon dicon" data-dicon="exclamation-octagon"></i></div>
+    <div><strong>Unable to reach the USGS earthquake feed.</strong> Check your connection and try again.</div>
+    <button class="btn-rain btn-rain-ghost btn-rain-sm mt-3" id="retryQuake">Retry</button>
+  </div>
+
+  <div id="quakeBody" class="d-none">
+    <div class="row g-4 mb-4">
+      <div class="col-lg-5">
+        <div class="rain-card reveal-on-scroll h-100">
+          <div class="card-eyebrow"><span>Nearest to You</span><span class="demo-data-tag" style="background:var(--accent-cyan); color:#fff;">LIVE</span></div>
+          <div id="qNearestEmpty" class="empty-state-inline d-none">
+            <i class="bi bi-check-circle glyph dicon" data-dicon="check-circle"></i>
+            <p>No tracked earthquakes match the current time window and magnitude filter.</p>
+          </div>
+          <div id="qNearestBody" class="d-none">
+            <h3 class="card-num" id="qNearestMag" style="font-size:2.6rem;">—</h3>
+            <div style="font-weight:600; color:var(--navy-950);" id="qNearestPlace">—</div>
+            <div class="row g-2 mt-2" style="font-size:.85rem;">
+              <div class="col-6"><span class="text-muted-rain">Distance</span><div style="font-weight:600;" id="qNearestDist">—</div></div>
+              <div class="col-6"><span class="text-muted-rain">Depth</span><div style="font-weight:600;" id="qNearestDepth">—</div></div>
+            </div>
+            <div class="data-source-line mt-2"><i class="bi bi-clock-history dicon" data-dicon="clock-history"></i> <span id="qNearestTime">—</span></div>
+            <a href="#" target="_blank" rel="noopener" class="btn-rain btn-rain-ghost btn-rain-sm mt-3" id="qNearestLink">View on USGS &rarr;</a>
+          </div>
+          <div class="mt-3" style="font-size:.78rem; color:var(--ink-400);" id="qLocSourceNote"></div>
+        </div>
+      </div>
+      <div class="col-lg-7">
+        <div class="rain-card reveal-on-scroll h-100" style="padding-bottom:1rem;">
+          <div class="card-eyebrow"><span>Epicenter Map</span><span class="demo-data-tag" style="background:var(--accent-cyan); color:#fff;">LIVE</span></div>
+          <div class="map-frame"><div id="quake-map"></div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="rain-card reveal-on-scroll mb-4">
+      <div class="card-eyebrow">
+        <span>Recent Activity</span>
+        <span class="status-badge status-caution" id="qCountBadge"><span class="dot"></span>0 tracked</span>
+      </div>
+      <div class="d-flex flex-column gap-2" id="quakeList"></div>
+      <div class="empty-state-inline d-none" id="quakeListEmpty">
+        <i class="bi bi-check-circle glyph dicon" data-dicon="check-circle"></i>
+        <p>No earthquakes at or above this magnitude in the Philippines for this window.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="rain-card reveal-on-scroll">
+    <div class="card-eyebrow"><span>About This Data</span><i class="bi bi-info-circle dicon" style="color:var(--accent-cyan);" data-dicon="info-circle"></i></div>
+    <p style="font-size:.87rem; color:var(--ink-600);">
+      Events are pulled live from the USGS FDSN earthquake catalog, filtered to a bounding box around the Philippine
+      archipelago (roughly 4–21°N, 116–127°E) so offshore events like those in the Philippine Trench or Moro Gulf are
+      included. USGS locates events worldwide using its own global seismic network, so magnitudes, depths, and locations
+      can differ slightly from PHIVOLCS' own catalog for the same event — treat this as a live cross-check, not a
+      replacement for official PHIVOLCS bulletins and intensity reports.
+    </p>
+    <div class="data-source-line"><i class="bi bi-box-arrow-up-right dicon" data-dicon="box-arrow-up-right"></i> <a href="https://earthquake.phivolcs.dost.gov.ph/" target="_blank" rel="noopener">Check official PHIVOLCS earthquake bulletins &rarr;</a></div>
+  </div>
+</template>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/animejs@4.5.0/lib/anime.iife.min.js"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="assets/js/animations.js"></script>
+<script src="assets/js/icons.js"></script>
+<script src="assets/js/demo-data.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="assets/js/supabase-client.js"></script>
+<script src="assets/js/rain-auth.js"></script>
+<script src="assets/js/offline-store.js"></script>
+<script src="assets/js/main.js"></script>
+<script type="module">
+  await RainAuth.init();
+  // CARTO Basemaps API key — required since CARTO deprecated anonymous
+  // keyless raster tile access (tiles otherwise render stamped "API KEY
+  // REQUIRED"). Like a Mapbox access token, this is meant to ship in
+  // client-side code and isn't a secret that needs server-side hiding.
+  const CARTO_API_KEY = "cb1_3qde_1_313d908e961a073e7e5de450";
+  const user = renderAppShell("earthquake.html", { title: "Earthquake" });
+  let quakeMap = null;
+  let quakeMarkers = [];
+  // Fallback location if geolocation is denied/unavailable — Tanauan City,
+  // Batangas, same fallback used everywhere else in this app. Clearly noted
+  // in the UI, never presented as if it were the resident's real GPS.
+  const FALLBACK_LAT = 14.0863, FALLBACK_LNG = 121.1497;
+
+  function magTone(mag) {
+    if (mag == null) return "status-safe";
+    if (mag >= 6) return "status-critical";
+    if (mag >= 4.5) return "status-warning";
+    if (mag >= 3) return "status-caution";
+    return "status-safe";
+  }
+
+  function timeAgo(ms) {
+    const diffMin = Math.round((Date.now() - ms) / 60000);
+    if (diffMin < 1) return "just now";
+    if (diffMin < 60) return `${diffMin} min ago`;
+    const diffHr = Math.round(diffMin / 60);
+    if (diffHr < 24) return `${diffHr} hr ago`;
+    return `${Math.round(diffHr / 24)} day${Math.round(diffHr / 24) === 1 ? "" : "s"} ago`;
+  }
+
+  function showSkeleton() {
+    document.getElementById("quakeSkeleton").classList.remove("d-none");
+    document.getElementById("quakeBody").classList.add("d-none");
+    document.getElementById("quakeError").classList.add("d-none");
+  }
+  function showBody() {
+    document.getElementById("quakeSkeleton").classList.add("d-none");
+    document.getElementById("quakeError").classList.add("d-none");
+    document.getElementById("quakeBody").classList.remove("d-none");
+  }
+  function showError() {
+    document.getElementById("quakeSkeleton").classList.add("d-none");
+    document.getElementById("quakeBody").classList.add("d-none");
+    document.getElementById("quakeError").classList.remove("d-none");
+  }
+
+  function renderMap(userLat, userLng, quakes, nearest) {
+    if (!quakeMap) {
+      quakeMap = L.map("quake-map").setView([userLat, userLng], 6);
+      L.tileLayer(`https://basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png?key=${CARTO_API_KEY}`, { attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>', maxZoom: 20 }).addTo(quakeMap);
+      L.marker([userLat, userLng], { icon: rainPinIcon("user", "bi-person-fill") }).addTo(quakeMap).bindPopup("Your location");
+    }
+    quakeMarkers.forEach((m) => quakeMap.removeLayer(m));
+    let nearestMarker = null;
+    quakeMarkers = quakes.map((q) => {
+      const isNearest = nearest && q === nearest;
+      const pulse = isNearest || (q.mag != null && q.mag >= 4.5);
+      const marker = L.marker([q.lat, q.lng], { icon: rainPinIcon("quake", "bi-activity", pulse) }).addTo(quakeMap);
+      marker.bindPopup(`${isNearest ? "<strong>Nearest epicenter</strong><br>" : ""}<strong>M${q.mag != null ? q.mag.toFixed(1) : "?"}</strong> — ${q.place}<br>Depth: ${q.depthKm != null ? q.depthKm.toFixed(0) + " km" : "—"}<br>${new Date(q.timeMs).toLocaleString()}`);
+      if (isNearest) nearestMarker = marker;
+      return marker;
+    });
+
+    // "Epicenter Map" should actually center on the nearest epicenter, not
+    // just show a fixed wide view of the user's region — this is what ties
+    // the map to the "Nearest to You" card beside it, and it re-fits every
+    // time the window/magnitude filter changes the nearest quake, not just
+    // once on first load.
+    //
+    // invalidateSize() MUST run before fitBounds()/setView(), not after —
+    // the map container is freshly inserted from a <template> and has no
+    // real size yet, so calling fitBounds() first makes Leaflet compute a
+    // broken view against a zero-size box, leaving a permanently gray map
+    // even once the container is later resized.
+    setTimeout(() => {
+      quakeMap.invalidateSize();
+      if (nearest) {
+        quakeMap.fitBounds([[userLat, userLng], [nearest.lat, nearest.lng]], { padding: [40, 40], maxZoom: 9 });
+        nearestMarker?.openPopup();
+      } else {
+        quakeMap.setView([userLat, userLng], 6);
+      }
+    }, 200);
+  }
+
+  function renderNearest(userLat, userLng, nearbyQuakes) {
+    const emptyEl = document.getElementById("qNearestEmpty");
+    const bodyEl = document.getElementById("qNearestBody");
+    if (!nearbyQuakes.length) {
+      emptyEl.classList.remove("d-none");
+      bodyEl.classList.add("d-none");
+      return;
+    }
+    emptyEl.classList.add("d-none");
+    bodyEl.classList.remove("d-none");
+    const nearest = nearbyQuakes[0]; // pre-sorted by distance
+    document.getElementById("qNearestMag").textContent = nearest.mag != null ? `M${nearest.mag.toFixed(1)}` : "M—";
+    document.getElementById("qNearestPlace").textContent = nearest.place;
+    document.getElementById("qNearestDist").textContent = `${Math.round(nearest.distKm)} km away`;
+    document.getElementById("qNearestDepth").textContent = nearest.depthKm != null ? `${nearest.depthKm.toFixed(0)} km` : "—";
+    document.getElementById("qNearestTime").textContent = timeAgo(nearest.timeMs);
+    document.getElementById("qNearestLink").href = nearest.url || "https://earthquake.usgs.gov/";
+  }
+
+  function renderList(quakes) {
+    const list = document.getElementById("quakeList");
+    const empty = document.getElementById("quakeListEmpty");
+    list.innerHTML = "";
+    document.getElementById("qCountBadge").innerHTML = `<span class="dot"></span>${quakes.length} tracked`;
+    if (!quakes.length) { empty.classList.remove("d-none"); return; }
+    empty.classList.add("d-none");
+    quakes.slice(0, 25).forEach((q) => {
+      const el = document.createElement("div");
+      el.className = "alert-banner level-advisory reveal-on-scroll";
+      el.innerHTML = `<i class="bi bi-activity icon dicon" data-dicon="activity"></i>
+        <div class="flex-grow-1">
+          <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
+            <strong>${q.place}</strong>
+            <span class="status-badge ${magTone(q.mag)}">${q.mag != null ? `M${q.mag.toFixed(1)}` : "M—"}</span>
+          </div>
+          <div class="data-source-line mt-1"><i class="bi bi-arrows-vertical"></i> ${q.depthKm != null ? q.depthKm.toFixed(0) + " km deep" : "Depth unknown"} · <i class="bi bi-clock-history"></i> ${timeAgo(q.timeMs)}${q.distKm != null ? ` · <i class="bi bi-geo"></i> ${Math.round(q.distKm)} km from you` : ""}</div>
+        </div>`;
+      list.appendChild(el);
+    });
+  }
+
+  async function loadEarthquakes(userLat, userLng, isRealLocation) {
+    showSkeleton();
+    const days = Number(document.getElementById("quakeWindow").value);
+    const minMagnitude = Number(document.getElementById("quakeMinMag").value);
+    try {
+      const quakes = await fetchPhilippineEarthquakes({ days, minMagnitude });
+      const withDist = quakes.map((q) => ({ ...q, distKm: haversineKm(userLat, userLng, q.lat, q.lng) }));
+      // "Nearest to You" always shows the closest tracked earthquake, no
+      // matter how far away — a 300km cutoff meant residents sometimes saw
+      // "no earthquakes" purely because the nearest one was 310km out, which
+      // reads as "nothing is happening" when something clearly is.
+      const byDistance = [...withDist].sort((a, b) => a.distKm - b.distKm);
+      const nearest = byDistance[0] || null;
+
+      renderNearest(userLat, userLng, byDistance);
+      renderMap(userLat, userLng, withDist, nearest);
+      renderList(withDist.sort((a, b) => b.timeMs - a.timeMs));
+
+      document.getElementById("qLocSourceNote").textContent = isRealLocation
+        ? "Distances use your device's GPS location."
+        : "Distances use an approximate location (GPS unavailable) — showing Tanauan City, Batangas.";
+
+      showBody();
+      RainAnim.initScrollReveal(".reveal-on-scroll");
+      // Save the raw (undistanced) list — distance is recomputed on
+      // fallback since a saved snapshot's userLat/userLng may be stale.
+      RainOffline.save("earthquakes", quakes);
+    } catch (err) {
+      console.error(err);
+      const cached = RainOffline.load("earthquakes");
+      if (cached && !RainOffline.isOnline()) {
+        const withDist = cached.data.map((q) => ({ ...q, distKm: haversineKm(userLat, userLng, q.lat, q.lng) }));
+        const byDistance = [...withDist].sort((a, b) => a.distKm - b.distKm);
+        renderNearest(userLat, userLng, byDistance);
+        renderMap(userLat, userLng, withDist, byDistance[0] || null);
+        renderList(withDist.sort((a, b) => b.timeMs - a.timeMs));
+        document.getElementById("qLocSourceNote").innerHTML =
+          `<span class="cached-data-tag"><i class="bi bi-cloud-slash"></i> Saved data</span> Offline — showing earthquakes saved ${RainOffline.timeAgo(cached.savedAt)}.`;
+        showBody();
+        RainAnim.initScrollReveal(".reveal-on-scroll");
+      } else {
+        showError();
+      }
+    }
+  }
+
+  function initWithLocation(lat, lng, isRealLocation) {
+    loadEarthquakes(lat, lng, isRealLocation);
+  }
+
+  function initEarthquakePage() {
+    document.getElementById("app-content").appendChild(document.getElementById("earthquake-content").content.cloneNode(true));
+    initializeAnimations();
+
+    let lastLat = FALLBACK_LAT, lastLng = FALLBACK_LNG, lastIsReal = false;
+
+    const reload = () => loadEarthquakes(lastLat, lastLng, lastIsReal);
+    document.getElementById("quakeRefreshBtn").addEventListener("click", reload);
+    document.getElementById("retryQuake").addEventListener("click", reload);
+    document.getElementById("quakeWindow").addEventListener("change", reload);
+    document.getElementById("quakeMinMag").addEventListener("change", reload);
+
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => { lastLat = pos.coords.latitude; lastLng = pos.coords.longitude; lastIsReal = true; initWithLocation(lastLat, lastLng, lastIsReal); },
+        () => initWithLocation(lastLat, lastLng, lastIsReal),
+        { timeout: 8000 }
+      );
+    } else {
+      initWithLocation(lastLat, lastLng, lastIsReal);
+    }
+  }
+
+  if (user) initEarthquakePage();
+</script>
+</body>
+</html>

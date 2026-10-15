@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script>(function(){try{var t=localStorage.getItem("rain_theme")||"dark";document.documentElement.setAttribute("data-theme",t);}catch(e){}})();</script>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Profile — RAIN</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
+<link rel="stylesheet" href="assets/css/style.css">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0a1830">
+<link rel="apple-touch-icon" href="assets/icons/icon-192.png">
+</head>
+<body>
+<div id="app-shell-root"></div>
+
+<template id="profile-content">
+  <div class="row justify-content-center">
+    <div class="col-lg-6">
+      <div class="rain-card reveal-on-scroll text-center mb-4">
+        <div class="avatar mx-auto mb-3" style="width:64px;height:64px;border-radius:50%;background:var(--navy-900);color:var(--accent-cyan);display:flex;align-items:center;justify-content:center;font-size:1.4rem;font-weight:700;" id="profileAvatar"></div>
+        <h3 style="font-weight:700; color:var(--navy-950);" id="profileName"></h3>
+        <span class="status-badge status-safe" id="profileRole"></span>
+      </div>
+      <div id="profileSaved" class="alert-banner level-info mb-3 d-none" style="opacity:1;">
+        <i class="bi bi-check-circle icon dicon" data-dicon="check-circle"></i><div>Profile updated.</div>
+      </div>
+      <form class="rain-card reveal-on-scroll" id="profileForm">
+        <div class="mb-3"><span class="text-muted-rain" style="font-size:.82rem;">Email</span><div style="font-weight:600;" id="profileEmail"></div></div>
+        <div class="mb-3">
+          <label class="form-label-rain" for="profilePhone">Mobile number</label>
+          <input type="tel" class="form-control form-control-rain" id="profilePhone" placeholder="09XXXXXXXXX" autocomplete="tel">
+          <div class="text-muted-rain mt-1" style="font-size:.8rem;">Philippine mobile number. Used to send you SMS disaster alerts.</div>
+        </div>
+        <div class="mb-3">
+          <label class="form-label-rain" for="profileCity">City / Municipality</label>
+          <select class="form-control form-control-rain form-select" id="profileCity">
+            <option value="" disabled>Select your city or municipality</option>
+          </select>
+          <button type="button" class="btn-rain btn-rain-outline btn-rain-sm mt-2" id="profileUseLocationBtn">
+            <i class="bi bi-geo-alt"></i> Use my current location
+          </button>
+          <input type="text" class="form-control form-control-rain mt-2 d-none" id="profileCityOther" placeholder="Type your city / municipality">
+          <div id="profileLocationStatus" class="text-muted-rain mt-1" style="font-size:.8rem;"></div>
+        </div>
+        <div class="mb-3"><span class="text-muted-rain" style="font-size:.82rem;">Account type</span><div style="font-weight:600;" id="profileRole2"></div></div>
+        <button type="submit" class="btn-rain btn-rain-primary" data-press><i class="bi bi-check-circle dicon" data-dicon="check-circle"></i> Save changes</button>
+      </form>
+    </div>
+  </div>
+</template>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/animejs@4.5.0/lib/anime.iife.min.js"></script>
+<script src="assets/js/animations.js"></script>
+<script src="assets/js/icons.js"></script>
+<script src="assets/js/demo-data.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="assets/js/supabase-client.js"></script>
+<script src="assets/js/rain-auth.js"></script>
+<script src="assets/js/offline-store.js"></script>
+<script src="assets/js/main.js"></script>
+<script src="assets/js/taal-places.js"></script>
+<script type="module">
+  await RainAuth.init();
+  const user = renderAppShell("profile.html", { title: "Profile" });
+  if (user) {
+    document.getElementById("app-content").appendChild(document.getElementById("profile-content").content.cloneNode(true));
+    const { data: stored, error: fetchError } = await sb.from("profiles").select("barangay, phone").eq("id", user.id).single();
+    if (fetchError) console.error("Fetch profile error:", fetchError);
+
+    // Accepts 09XXXXXXXXX, 639XXXXXXXXX, or +639XXXXXXXXX and normalizes all
+    // of them to E.164 (+639XXXXXXXXX) -- the format the SMS gateway expects.
+    // Returns null if the input isn't a recognizable PH mobile number.
+    function normalizePhPhone(raw) {
+      const digits = String(raw || "").replace(/\D/g, "");
+      if (digits.length === 11 && digits.startsWith("09")) return "+63" + digits.slice(1);
+      if (digits.length === 12 && digits.startsWith("639")) return "+" + digits;
+      if (digits.length === 10 && digits.startsWith("9")) return "+63" + digits;
+      return null;
+    }
+
+    const phoneEl = document.getElementById("profilePhone");
+    phoneEl.value = (stored && stored.phone) || "";
+    document.getElementById("profileAvatar").textContent = user.name.split(" ").map((s) => s[0]).slice(0, 2).join("").toUpperCase();
+    document.getElementById("profileName").textContent = user.name;
+    document.getElementById("profileRole").textContent = user.role;
+    document.getElementById("profileEmail").textContent = user.email;
+    document.getElementById("profileRole2").textContent = user.role;
+
+    const cityEl = document.getElementById("profileCity");
+    const cityOtherEl = document.getElementById("profileCityOther");
+    const locationStatusEl = document.getElementById("profileLocationStatus");
+
+    // Populate the City dropdown with places near Taal Volcano (plus the
+    // Laguna/Calamba area) grouped by region, with a trailing "Other" option.
+    TaalPlaces.populateSelect(cityEl);
+
+    const existingCity = (stored && stored.barangay) || "";
+    if (existingCity) {
+      cityEl.value = existingCity;
+      if (!cityEl.value) {
+        // Stored value doesn't match any listed place (legacy free-text
+        // entry, or somewhere outside the list) — fall back to "Other".
+        cityEl.value = TaalPlaces.OTHER_VALUE;
+        cityOtherEl.value = existingCity;
+        cityOtherEl.classList.remove("d-none");
+      }
+    }
+
+    cityEl.addEventListener("change", () => {
+      const isOther = cityEl.value === TaalPlaces.OTHER_VALUE;
+      cityOtherEl.classList.toggle("d-none", !isOther);
+      if (isOther) cityOtherEl.focus();
+    });
+
+    /** Resolves the form's actual city value, accounting for the "Other" fallback. */
+    function getCityValue() {
+      return cityEl.value === TaalPlaces.OTHER_VALUE ? cityOtherEl.value.trim() : cityEl.value;
+    }
+
+    // "Use my current location" — matches the browser's geolocation reading
+    // to the closest place in TaalPlaces.PLACES. No external geocoding API
+    // is used, so this stays free and works without any additional API key.
+    document.getElementById("profileUseLocationBtn").addEventListener("click", () => {
+      if (!navigator.geolocation) {
+        locationStatusEl.textContent = "Geolocation isn't supported on this browser. Please select manually.";
+        return;
+      }
+      locationStatusEl.textContent = "Locating…";
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const match = TaalPlaces.nearest(pos.coords.latitude, pos.coords.longitude);
+          if (!match) {
+            locationStatusEl.textContent = "Couldn't match your location to a listed area. Please select manually.";
+            return;
+          }
+          if (match.distanceKm <= 40) {
+            cityEl.value = match.place.name;
+            cityOtherEl.classList.add("d-none");
+            locationStatusEl.textContent = `Detected: ${match.place.name} (~${match.distanceKm.toFixed(1)} km away)`;
+          } else {
+            locationStatusEl.textContent = `Closest listed area is ${match.place.name} (~${match.distanceKm.toFixed(0)} km away). Please select the nearest option, or choose "Other" below.`;
+          }
+        },
+        () => {
+          locationStatusEl.textContent = "Location access was denied or unavailable. Please select manually.";
+        },
+        { enableHighAccuracy: true, timeout: 8000 }
+      );
+    });
+
+    initializeAnimations();
+
+    document.getElementById("profileForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const city = getCityValue();
+      const rawPhone = phoneEl.value.trim();
+      const phone = rawPhone ? normalizePhPhone(rawPhone) : null;
+      if (rawPhone && !phone) {
+        phoneEl.focus();
+        rainToast("Enter a valid PH mobile number, e.g. 09171234567", "bi-exclamation-triangle");
+        return;
+      }
+      const { error } = await sb.from("profiles").update({ barangay: city, phone }).eq("id", user.id);
+      if (error) { console.error("Update profile error:", error); rainToast("Could not save changes", "bi-exclamation-triangle"); return; }
+      phoneEl.value = phone || "";
+      const saved = document.getElementById("profileSaved");
+      saved.classList.remove("d-none");
+      RainAnim.animateAlertBanner(saved);
+      rainToast("Profile updated", "bi-check-circle");
+    });
+  }
+</script>
+</body>
+</html>

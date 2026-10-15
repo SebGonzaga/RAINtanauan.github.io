@@ -1,0 +1,534 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script>(function(){try{var t=localStorage.getItem("rain_theme")||"dark";document.documentElement.setAttribute("data-theme",t);}catch(e){}})();</script>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Weather — RAIN</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="stylesheet" href="assets/css/style.css">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0a1830">
+<link rel="apple-touch-icon" href="assets/icons/icon-192.png">
+</head>
+<body>
+<div id="app-shell-root"></div>
+
+<template id="weather-content">
+  <div class="d-flex flex-wrap gap-3 align-items-center justify-content-between mb-3">
+    <div class="input-group" style="max-width:340px;">
+      <span class="input-group-text bg-white border-end-0"><i class="bi bi-search dicon" data-dicon="search"></i></span>
+      <input type="text" class="form-control form-control-rain border-start-0" id="citySearch" placeholder="Search city...">
+      <div class="list-group position-absolute d-none" id="citySuggestions" style="top:100%; left:0; right:0; z-index:50; max-width:340px;"></div>
+    </div>
+    <div class="d-flex gap-2">
+      <button class="btn-rain btn-rain-ghost btn-rain-sm" id="useLocationBtn" data-press><i class="bi bi-geo-alt dicon" data-dicon="geo-alt"></i> Use my location</button>
+    </div>
+  </div>
+
+  <div id="weatherSkeleton" aria-live="polite" aria-label="Loading weather data">
+    <div class="row g-4 mb-4">
+      <div class="col-lg-5">
+        <div class="rain-card h-100">
+          <div class="d-flex justify-content-between mb-3"><span class="skeleton" style="width:40%; height:14px;"></span><span class="skeleton" style="width:70px; height:14px;"></span></div>
+          <span class="skeleton d-block mb-3" style="width:50%; height:2.6rem;"></span>
+          <span class="skeleton d-block mb-3" style="width:60%; height:18px;"></span>
+          <div class="row g-2">
+            <div class="col-6"><span class="skeleton d-block" style="height:34px;"></span></div>
+            <div class="col-6"><span class="skeleton d-block" style="height:34px;"></span></div>
+            <div class="col-6 mt-2"><span class="skeleton d-block" style="height:34px;"></span></div>
+            <div class="col-6 mt-2"><span class="skeleton d-block" style="height:34px;"></span></div>
+          </div>
+        </div>
+      </div>
+      <div class="col-lg-7">
+        <div class="rain-card h-100">
+          <span class="skeleton d-block mb-3" style="width:35%; height:14px;"></span>
+          <span class="skeleton d-block" style="height:150px;"></span>
+        </div>
+      </div>
+    </div>
+    <div class="rain-card mb-4">
+      <span class="skeleton d-block mb-3" style="width:30%; height:14px;"></span>
+      <div class="d-flex gap-2">
+        <span class="skeleton flex-fill" style="height:90px;"></span>
+        <span class="skeleton flex-fill" style="height:90px;"></span>
+        <span class="skeleton flex-fill" style="height:90px;"></span>
+        <span class="skeleton flex-fill d-none d-md-block" style="height:90px;"></span>
+        <span class="skeleton flex-fill d-none d-md-block" style="height:90px;"></span>
+        <span class="skeleton flex-fill d-none d-md-block" style="height:90px;"></span>
+      </div>
+    </div>
+    <div class="rain-card">
+      <span class="skeleton d-block mb-3" style="width:25%; height:14px;"></span>
+      <span class="skeleton d-block" style="height:260px;"></span>
+    </div>
+  </div>
+
+  <div id="weatherError" class="error-state d-none">
+    <div class="glyph"><i class="bi bi-exclamation-octagon dicon" data-dicon="exclamation-octagon"></i></div>
+    <div><strong>Unable to retrieve weather data.</strong> Please try again.</div>
+    <button class="btn-rain btn-rain-ghost btn-rain-sm mt-3" id="retryWeather">Retry</button>
+  </div>
+
+  <div id="weatherBody" class="d-none">
+    <div class="row g-4 mb-4">
+      <div class="col-lg-5">
+        <div class="rain-card reveal-on-scroll h-100">
+          <div class="card-eyebrow"><span id="wCity">Tanauan City, PH</span><span class="demo-data-tag">DEMO DATA</span></div>
+          <h3 class="card-num" id="wTemp" style="font-size:3rem;">31°C</h3>
+          <div class="d-flex align-items-center gap-2 mb-3">
+            <i class="bi bi-cloud-sun fs-3" style="color:var(--accent-cyan);" id="wIcon"></i>
+            <span id="wCondition" style="font-weight:600; color:var(--navy-950);">Partly Cloudy</span>
+          </div>
+          <div class="row g-2" style="font-size:.85rem;">
+            <div class="col-6"><span class="text-muted-rain">Feels like</span><div style="font-weight:600;" id="wFeels">33°C</div></div>
+            <div class="col-6"><span class="text-muted-rain">Humidity</span><div style="font-weight:600;" id="wHumidity">78%</div></div>
+            <div class="col-6"><span class="text-muted-rain">Wind speed</span><div style="font-weight:600;" id="wWind">12 km/h</div></div>
+            <div class="col-6"><span class="text-muted-rain">Visibility</span><div style="font-weight:600;" id="wVisibility">10 km</div></div>
+          </div>
+          <div class="data-source-line"><i class="bi bi-clock-history dicon" data-dicon="clock-history"></i> <span id="wTimestamp">Updated just now</span> · Source: OpenWeatherMap</div>
+        </div>
+      </div>
+      <div class="col-lg-7">
+        <div class="rain-card reveal-on-scroll h-100">
+          <div class="card-eyebrow"><span>Temperature Trend</span><i class="bi bi-graph-up dicon" style="color:var(--accent-cyan);" data-dicon="graph-up"></i></div>
+          <canvas id="tempTrendChart" height="150"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <div class="rain-card reveal-on-scroll mb-4" id="hourlyCard">
+      <div class="card-eyebrow"><span>Next 24 Hours</span><i class="bi bi-clock dicon" style="color:var(--accent-cyan);" data-dicon="clock"></i></div>
+      <div id="rainHeadsUp" class="rain-heads-up d-none" role="status"></div>
+      <div class="hourly-strip" id="hourlyStrip"></div>
+      <div class="data-source-line"><i class="bi bi-info-circle dicon" data-dicon="info-circle"></i> Forecast in 3-hour steps. Chance of rain is an estimate; always follow official advisories.</div>
+    </div>
+
+    <div class="rain-card reveal-on-scroll mb-4">
+      <div class="card-eyebrow"><span>6-Day Forecast</span></div>
+      <div class="forecast-strip" id="forecastStrip"></div>
+    </div>
+
+    <div class="rain-card reveal-on-scroll">
+      <div class="card-eyebrow"><span>Weather Map</span></div>
+      <div class="map-frame"><div id="weather-map"></div></div>
+    </div>
+  </div>
+</template>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/animejs@4.5.0/lib/anime.iife.min.js"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<script src="assets/js/animations.js"></script>
+<script src="assets/js/icons.js"></script>
+<script src="assets/js/demo-data.js"></script>
+<script src="assets/js/weather-timely.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="assets/js/supabase-client.js"></script>
+<script src="assets/js/rain-auth.js"></script>
+<script src="assets/js/offline-store.js"></script>
+<script src="assets/js/main.js"></script>
+<script type="module">
+  await RainAuth.init();
+  const user = renderAppShell("weather.html", { title: "Weather" });
+  let map, marker, chart;
+
+  const ICON_MAP = {
+    "01d": "bi-sun", "01n": "bi-moon-stars",
+    "02d": "bi-cloud-sun", "02n": "bi-cloud-moon",
+    "03d": "bi-cloud", "03n": "bi-cloud",
+    "04d": "bi-clouds", "04n": "bi-clouds",
+    "09d": "bi-cloud-drizzle", "09n": "bi-cloud-drizzle",
+    "10d": "bi-cloud-rain", "10n": "bi-cloud-rain",
+    "11d": "bi-cloud-lightning", "11n": "bi-cloud-lightning",
+    "13d": "bi-snow", "13n": "bi-snow",
+    "50d": "bi-cloud-haze", "50n": "bi-cloud-haze",
+  };
+
+  // OpenWeatherMap's `icon` code alone does NOT distinguish rain intensity —
+  // light rain (id 500), moderate rain (501), and heavy/extreme rain
+  // (502-504), as well as shower rain (520-531), all share icon "10d"/"10n".
+  // That's why a "Moderate Rain" or "Heavy Rain" description was rendering
+  // the same light drizzle-weight icon. Use the numeric condition `id`
+  // (present on every OWM weather object) to pick an icon whose visual
+  // weight actually matches the reported intensity; fall back to the
+  // plain icon-code mapping for anything else (clear, clouds, snow, etc).
+  function iconForCondition(weather) {
+    if (!weather) return "bi-cloud";
+    const id = weather.id;
+    if (id === 500) return "bi-cloud-drizzle";           // light rain
+    if (id === 501) return "bi-cloud-rain";               // moderate rain
+    if (id >= 502 && id <= 504) return "bi-cloud-rain-heavy"; // heavy/violent/extreme rain
+    if (id === 511) return "bi-cloud-rain-heavy";          // freezing rain
+    if (id >= 520 && id <= 531) return "bi-cloud-rain-heavy"; // shower rain
+    return ICON_MAP[weather.icon] || "bi-cloud";
+  }
+
+  const FORECAST_DEMO = [
+    { day: "Today", icon: "bi-cloud-sun", hi: 32, lo: 25 },
+    { day: "Sun", icon: "bi-cloud-rain", hi: 29, lo: 24 },
+    { day: "Mon", icon: "bi-cloud-rain-heavy", hi: 27, lo: 23 },
+    { day: "Tue", icon: "bi-clouds", hi: 30, lo: 24 },
+    { day: "Wed", icon: "bi-sun", hi: 33, lo: 25 },
+    { day: "Thu", icon: "bi-cloud-sun", hi: 31, lo: 24 },
+  ];
+
+  // CARTO Basemaps API key — required since CARTO deprecated anonymous
+  // keyless raster tile access (without it, tiles render stamped "API KEY
+  // REQUIRED"). Like a Mapbox access token, this key is meant to be used
+  // client-side and isn't a secret that needs server-side hiding.
+  const CARTO_API_KEY = "cb1_3qde_1_313d908e961a073e7e5de450";
+
+  function renderMap(lat, lng, label) {
+    if (!map) {
+      map = L.map("weather-map").setView([lat, lng], 10);
+      L.tileLayer(`https://basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png?key=${CARTO_API_KEY}`, { attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>', maxZoom: 20 }).addTo(map);
+      marker = L.marker([lat, lng], { icon: rainPinIcon("user", "bi-geo-alt-fill") }).addTo(map);
+    } else {
+      map.setView([lat, lng], 10);
+      marker.setLatLng([lat, lng]);
+    }
+    marker.bindPopup(label).openPopup();
+    setTimeout(() => map.invalidateSize(), 200);
+  }
+
+  function renderChart(labels, values) {
+    if (chart) chart.destroy();
+    chart = new Chart(document.getElementById("tempTrendChart"), {
+      type: "line",
+      data: {
+        labels,
+        datasets: [{
+          label: "Temperature Trend (°C)",
+          data: values,
+          borderColor: "#33c9d1",
+          backgroundColor: "rgba(51,201,209,.15)",
+          fill: true,
+          tension: 0.35,
+          pointBackgroundColor: "#0a1830",
+        }],
+      },
+      options: {
+        responsive: true,
+        plugins: { legend: { display: false } },
+        scales: { y: { ticks: { callback: (v) => v + "°" } } },
+      },
+    });
+  }
+
+  // ---- Timely weather: hourly strip, rain heads-up, auto-refresh ----
+  let liveUpdatedMs = null;      // set only while showing a live reading
+  let lastLoc = null;            // { label, lat, lng } of the last live load
+
+  function renderHourly(list) {
+    const slots = RainTimely.hourlySlots(list);
+    const strip = document.getElementById("hourlyStrip");
+    strip.innerHTML = "";
+    slots.forEach((s, i) => {
+      const el = document.createElement("div");
+      const isNow = i === 0 && Math.abs(s.dt * 1000 - Date.now()) <= 90 * 60 * 1000;
+      el.className = "hourly-card" + (isNow ? " is-now" : "");
+      const label = isNow ? "Now" : new Date(s.dt * 1000).toLocaleTimeString([], { hour: "numeric" });
+      const rainCls = s.pop >= 60 ? " is-high" : s.pop >= 30 ? " is-mid" : "";
+      el.innerHTML = `<div class="h-time">${label}</div><div class="h-icon">${RainIcons.weatherIconHTML(iconForCondition(s.weather))}</div><div class="h-temp">${s.tempC}°</div><div class="h-rain${rainCls}"><i class="bi bi-droplet-fill"></i>${s.pop}%</div>`;
+      strip.appendChild(el);
+    });
+    const box = document.getElementById("rainHeadsUp");
+    const alert = RainTimely.rainHeadsUp(slots);
+    if (alert) {
+      const when = alert.hours <= 1 ? "within the next hour or so" : `in about ${alert.hours} hours`;
+      const msg = `${alert.heavy ? "Heavy rain or storms possible" : "Rain likely"} ${when} (${alert.pop}% chance). Plan ahead and check official advisories.`;
+      box.className = "rain-heads-up" + (alert.heavy ? " is-heavy" : "");
+      box.innerHTML = `<i class="bi bi-cloud-rain-heavy"></i><span></span>`;
+      box.querySelector("span").textContent = msg;
+    } else {
+      box.className = "rain-heads-up d-none";
+    }
+    document.getElementById("hourlyCard").classList.toggle("d-none", slots.length === 0);
+  }
+
+  function hideHourly() {
+    liveUpdatedMs = null;
+    document.getElementById("hourlyCard").classList.add("d-none");
+  }
+
+  function tickTimestamp() {
+    if (liveUpdatedMs == null) return;
+    const time = new Date(liveUpdatedMs).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    document.getElementById("wTimestamp").textContent = `Updated ${RainTimely.agoText(liveUpdatedMs)} (${time})`;
+  }
+
+  async function autoRefresh() {
+    if (!lastLoc || document.hidden || !navigator.onLine) return;
+    try { await loadLiveWeather(lastLoc.label, lastLoc.lat, lastLoc.lng, true); }
+    catch (err) { console.warn("Auto-refresh skipped:", err); }
+  }
+
+  function showWeatherBody() {
+    document.getElementById("weatherSkeleton").classList.add("d-none");
+    document.getElementById("weatherError").classList.add("d-none");
+    document.getElementById("weatherBody").classList.remove("d-none");
+  }
+
+  function showWeatherError() {
+    document.getElementById("weatherSkeleton").classList.add("d-none");
+    document.getElementById("weatherBody").classList.add("d-none");
+    document.getElementById("weatherError").classList.remove("d-none");
+  }
+
+  function setSourceTag(isLive) {
+    document.querySelector("#weatherBody .demo-data-tag")?.remove();
+    if (!isLive) {
+      const tag = document.createElement("span");
+      tag.className = "demo-data-tag";
+      tag.textContent = "DEMO DATA";
+      document.querySelector("#weatherBody .card-eyebrow").appendChild(tag);
+    }
+  }
+
+  function renderDemoWeather(cityName) {
+    document.getElementById("wCity").textContent = cityName;
+    document.getElementById("wTemp").textContent = "31°C";
+    document.getElementById("wCondition").textContent = "Partly Cloudy";
+    document.getElementById("wIcon").className = "fs-3";
+    RainIcons.renderWeatherIcon(document.getElementById("wIcon"), "bi-cloud-sun");
+    document.getElementById("wFeels").textContent = "33°C";
+    document.getElementById("wHumidity").textContent = "78%";
+    document.getElementById("wWind").textContent = "12 km/h";
+    document.getElementById("wVisibility").textContent = "10 km";
+    document.getElementById("wTimestamp").textContent = "Demo snapshot — add an API key for live data";
+    hideHourly();
+
+    const strip = document.getElementById("forecastStrip");
+    strip.innerHTML = "";
+    FORECAST_DEMO.forEach((f) => {
+      const el = document.createElement("div");
+      el.className = "forecast-card";
+      el.innerHTML = `<div class="day">${f.day}</div><div class="icon">${RainIcons.weatherIconHTML(f.icon)}</div><div class="hi">${f.hi}°</div><div class="lo">${f.lo}°</div>`;
+      strip.appendChild(el);
+    });
+    renderChart(FORECAST_DEMO.map((f) => f.day), FORECAST_DEMO.map((f) => f.hi));
+    renderMap(14.0863, 121.1497, cityName);
+    setSourceTag(false);
+    showWeatherBody();
+    RainAnim.initScrollReveal(".reveal-on-scroll");
+    setWeatherCache({ isLive: false, city: cityName, tempC: 31, condition: "Partly Cloudy", icon: "bi-cloud-sun" });
+  }
+
+  async function fetchCurrentByCoords(lat, lng) {
+    const res = await fetch(`/api/weather?lat=${lat}&lng=${lng}`);
+    if (!res.ok) throw new Error("current weather request failed: " + res.status);
+    return res.json();
+  }
+
+  async function fetchForecastByCoords(lat, lng) {
+    const res = await fetch(`/api/weather?lat=${lat}&lng=${lng}&forecast=1`);
+    if (!res.ok) throw new Error("forecast request failed: " + res.status);
+    return res.json();
+  }
+
+  async function geocodeCity(query) {
+    const res = await fetch(`/api/weather?geocode=${encodeURIComponent(query)}`);
+    if (!res.ok) throw new Error("geocoding failed: " + res.status);
+    return res.json();
+  }
+
+  function dailyFromForecastList(list) {
+    const byDay = {};
+    list.forEach((item) => {
+      const date = item.dt_txt.split(" ")[0];
+      if (!byDay[date]) byDay[date] = { temps: [], weather: item.weather[0] };
+      byDay[date].temps.push(item.main.temp);
+      if (item.dt_txt.includes("12:00:00")) byDay[date].weather = item.weather[0];
+    });
+    return Object.keys(byDay).slice(0, 6).map((date) => {
+      const d = new Date(date + "T00:00:00");
+      return {
+        day: d.toLocaleDateString(undefined, { weekday: "short" }),
+        icon: iconForCondition(byDay[date].weather),
+        hi: Math.round(Math.max(...byDay[date].temps)),
+        lo: Math.round(Math.min(...byDay[date].temps)),
+      };
+    });
+  }
+
+  async function loadLiveWeather(cityLabel, lat, lng, silent) {
+    if (!silent) {
+      document.getElementById("weatherBody").classList.add("d-none");
+      document.getElementById("weatherError").classList.add("d-none");
+      document.getElementById("weatherSkeleton").classList.remove("d-none");
+    }
+    try {
+      const [current, forecast] = await Promise.all([fetchCurrentByCoords(lat, lng), fetchForecastByCoords(lat, lng)]);
+
+      document.getElementById("wCity").textContent = cityLabel || `${current.name}, ${current.sys?.country || ""}`;
+      document.getElementById("wTemp").textContent = `${Math.round(current.main.temp)}°C`;
+      document.getElementById("wCondition").textContent = current.weather[0].description.replace(/\b\w/g, (c) => c.toUpperCase());
+      document.getElementById("wIcon").className = "fs-3";
+      RainIcons.renderWeatherIcon(document.getElementById("wIcon"), iconForCondition(current.weather[0]));
+      document.getElementById("wFeels").textContent = `${Math.round(current.main.feels_like)}°C`;
+      document.getElementById("wHumidity").textContent = `${current.main.humidity}%`;
+      document.getElementById("wWind").textContent = `${Math.round(current.wind.speed * 3.6)} km/h`;
+      document.getElementById("wVisibility").textContent = current.visibility != null ? `${(current.visibility / 1000).toFixed(1)} km` : "—";
+      liveUpdatedMs = current.dt * 1000;
+      lastLoc = { label: cityLabel, lat, lng };
+      tickTimestamp();
+      renderHourly(forecast.list);
+
+      const days = dailyFromForecastList(forecast.list);
+      const strip = document.getElementById("forecastStrip");
+      strip.innerHTML = "";
+      days.forEach((f) => {
+        const el = document.createElement("div");
+        el.className = "forecast-card";
+        el.innerHTML = `<div class="day">${f.day}</div><div class="icon">${RainIcons.weatherIconHTML(f.icon)}</div><div class="hi">${f.hi}°</div><div class="lo">${f.lo}°</div>`;
+        strip.appendChild(el);
+      });
+      renderChart(days.map((f) => f.day), days.map((f) => f.hi));
+      if (!silent) renderMap(current.coord.lat, current.coord.lon, document.getElementById("wCity").textContent);
+      setSourceTag(true);
+      showWeatherBody();
+      if (!silent) RainAnim.initScrollReveal(".reveal-on-scroll");
+      setWeatherCache({
+        isLive: true,
+        city: document.getElementById("wCity").textContent,
+        tempC: Math.round(current.main.temp),
+        condition: current.weather[0].description.replace(/\b\w/g, (c) => c.toUpperCase()),
+        icon: iconForCondition(current.weather[0]),
+        lat: current.coord.lat, lng: current.coord.lon,
+      });
+    } catch (err) {
+      console.error(err);
+      throw err;
+    }
+  }
+
+  async function loadWeather(cityLabel, lat, lng) {
+    try {
+      await loadLiveWeather(cityLabel, lat, lng);
+    } catch (err) {
+      console.error("Live weather unavailable, falling back to last saved reading:", err);
+      // Prefer the last real reading we actually saved (setWeatherCache(),
+      // written on every successful live/demo load — see main.js) over the
+      // generic 31°C placeholder, so "offline" shows honest stale data
+      // instead of a snapshot that was never true for this location.
+      const cached = getWeatherCache();
+      if (cached && cached.isLive && !RainOffline.isOnline()) {
+        renderCachedWeather(cached);
+      } else {
+        renderDemoWeather(cityLabel || "Tanauan City, PH");
+      }
+    }
+  }
+
+  /** Renders the last successfully-fetched LIVE reading (from
+   *  getWeatherCache()) with an honest "saved X ago, offline" timestamp,
+   *  instead of the generic demo snapshot — used only when the browser is
+   *  actually offline and a real prior reading exists. */
+  function renderCachedWeather(cached) {
+    document.getElementById("wCity").textContent = cached.city || "—";
+    document.getElementById("wTemp").textContent = cached.tempC != null ? `${cached.tempC}°C` : "—";
+    document.getElementById("wCondition").textContent = cached.condition || "—";
+    document.getElementById("wIcon").className = "fs-3";
+    RainIcons.renderWeatherIcon(document.getElementById("wIcon"), cached.icon || "bi-cloud");
+    document.getElementById("wFeels").textContent = "—";
+    document.getElementById("wHumidity").textContent = "—";
+    document.getElementById("wWind").textContent = "—";
+    document.getElementById("wVisibility").textContent = "—";
+    document.getElementById("wTimestamp").textContent = `Offline — showing reading saved ${RainOffline.timeAgo(cached.cachedAt)}`;
+    hideHourly();
+
+    const strip = document.getElementById("forecastStrip");
+    strip.innerHTML = "";
+    if (cached.lat != null && cached.lng != null) renderMap(cached.lat, cached.lng, cached.city);
+
+    document.querySelector("#weatherBody .demo-data-tag")?.remove();
+    const tag = document.createElement("span");
+    tag.className = "cached-data-tag";
+    tag.innerHTML = `<i class="bi bi-cloud-slash"></i> Saved data`;
+    document.querySelector("#weatherBody .card-eyebrow").appendChild(tag);
+
+    showWeatherBody();
+    RainAnim.initScrollReveal(".reveal-on-scroll");
+  }
+
+  function renderSuggestions(results) {
+    const host = document.getElementById("citySuggestions");
+    if (!results.length) { host.classList.add("d-none"); host.innerHTML = ""; return; }
+    host.innerHTML = results.map((r, i) =>
+      `<button type="button" class="list-group-item list-group-item-action" data-idx="${i}" style="font-size:.85rem;">${r.name}${r.state ? ", " + r.state : ""}, ${r.country}</button>`
+    ).join("");
+    host.classList.remove("d-none");
+    host.querySelectorAll("button").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const r = results[+btn.dataset.idx];
+        host.classList.add("d-none");
+        document.getElementById("citySearch").value = `${r.name}, ${r.country}`;
+        loadWeather(`${r.name}, ${r.country}`, r.lat, r.lon);
+      });
+    });
+  }
+
+  let searchDebounce;
+  function initWeatherPage() {
+    document.getElementById("app-content").appendChild(document.getElementById("weather-content").content.cloneNode(true));
+    initializeAnimations();
+
+    document.getElementById("retryWeather").addEventListener("click", () => {
+      const search = document.getElementById("citySearch").value.trim();
+      if (search) loadWeather(search, 14.0863, 121.1497);
+      else loadWeather("Tanauan City, PH", 14.0863, 121.1497);
+    });
+
+    document.getElementById("useLocationBtn").addEventListener("click", () => {
+      if (!navigator.geolocation) { rainToast("Geolocation not supported on this browser.", "bi-exclamation-triangle"); return; }
+      navigator.geolocation.getCurrentPosition(
+        (pos) => loadWeather(null, pos.coords.latitude, pos.coords.longitude),
+        () => rainToast("Location permission denied — try the city search instead.", "bi-geo-alt")
+      );
+    });
+
+    const searchInput = document.getElementById("citySearch");
+    searchInput.addEventListener("input", (e) => {
+      clearTimeout(searchDebounce);
+      const q = e.target.value.trim();
+      if (q.length < 3) { document.getElementById("citySuggestions").classList.add("d-none"); return; }
+      searchDebounce = setTimeout(async () => {
+        try { renderSuggestions(await geocodeCity(q)); } catch (err) { console.error(err); }
+      }, 400);
+    });
+    searchInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && e.target.value.trim()) {
+        document.getElementById("citySuggestions").classList.add("d-none");
+      }
+    });
+    document.addEventListener("click", (e) => {
+      if (!e.target.closest("#citySearch") && !e.target.closest("#citySuggestions")) {
+        document.getElementById("citySuggestions").classList.add("d-none");
+      }
+    });
+
+    setInterval(tickTimestamp, 30000);
+    setInterval(autoRefresh, RainTimely.REFRESH_MS);
+    document.addEventListener("visibilitychange", () => {
+      if (!document.hidden && liveUpdatedMs != null && Date.now() - liveUpdatedMs > RainTimely.REFRESH_MS) autoRefresh();
+    });
+
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => loadWeather(null, pos.coords.latitude, pos.coords.longitude),
+        () => loadWeather("Tanauan City, PH", 14.0863, 121.1497)
+      );
+    } else {
+      loadWeather("Tanauan City, PH", 14.0863, 121.1497);
+    }
+  }
+
+  if (user) initWeatherPage();
+</script>
+</body>
+</html>

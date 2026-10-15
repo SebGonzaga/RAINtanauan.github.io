@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Register — RAIN</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
+<link rel="stylesheet" href="assets/css/style.css">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0a1830">
+<link rel="apple-touch-icon" href="assets/icons/icon-192.png">
+</head>
+<body>
+<a href="#main" class="skip-link">Skip to content</a>
+<div class="auth-shell">
+  <div class="auth-side d-none d-lg-flex">
+    <a href="index.html" class="navbar-brand text-white text-decoration-none d-flex align-items-center gap-2" style="font-family:var(--font-display); font-weight:700; font-size:1.3rem;">
+      <span class="brand-mark" style="width:30px;height:30px;border-radius:8px;background:linear-gradient(145deg, var(--accent-cyan), #1f8489); display:flex; align-items:center; justify-content:center; color:var(--navy-950); font-size:.85rem;">R</span>AIN
+    </a>
+    <div>
+      <div class="eyebrow mb-3">Join the network</div>
+      <h2 class="text-white mb-3" style="font-family:var(--font-display); font-weight:700; font-size:2rem;">Prepared communities respond faster.</h2>
+      <p style="color:rgba(255,255,255,.65); max-width:380px;">Register to receive alerts for your city, ask RAIN for disaster guidance, and report incidents directly to responders.</p>
+    </div>
+    <div style="color:rgba(255,255,255,.4); font-family:var(--font-mono); font-size:.75rem;">New accounts default to the Community Resident role.</div>
+  </div>
+
+  <div class="auth-form-col" id="main">
+    <div class="auth-card">
+      <a href="index.html" class="brand d-lg-none"><span class="brand-mark">R</span>AIN</a>
+      <h1 style="font-size:1.6rem; font-weight:700; color:var(--navy-950);">Create your account</h1>
+      <p class="text-muted-rain mb-4">Free for Philippine community residents.</p>
+
+      <div id="regError" class="alert-banner level-warning mb-3 d-none" style="opacity:1;">
+        <i class="bi bi-exclamation-triangle icon dicon" data-dicon="exclamation-triangle"></i>
+        <div id="regErrorText">Please check the highlighted fields.</div>
+      </div>
+      <div id="regSuccess" class="alert-banner level-info mb-3 d-none" style="opacity:1;">
+        <i class="bi bi-check-circle icon dicon" data-dicon="check-circle"></i>
+        <div>Account created. Redirecting to sign in…</div>
+      </div>
+
+      <form id="registerForm" novalidate>
+        <div class="mb-3">
+          <label class="form-label-rain" for="username">Username</label>
+          <input type="text" class="form-control form-control-rain" id="username" required minlength="3" autocomplete="username">
+        </div>
+        <div class="mb-3">
+          <label class="form-label-rain" for="regEmail">Email address</label>
+          <input type="email" class="form-control form-control-rain" id="regEmail" required autocomplete="email">
+        </div>
+        <div class="mb-3">
+          <label class="form-label-rain" for="regPhone">Mobile number</label>
+          <input type="tel" class="form-control form-control-rain" id="regPhone" required placeholder="09XXXXXXXXX" autocomplete="tel">
+          <div class="text-muted-rain mt-1" style="font-size:.8rem;">Philippine mobile number. Used to send you SMS disaster alerts.</div>
+        </div>
+        <div class="mb-3">
+          <label class="form-label-rain" for="city">City / Municipality</label>
+          <select class="form-control form-control-rain form-select" id="city" required>
+            <option value="" selected disabled>Select your city or municipality</option>
+          </select>
+          <button type="button" class="btn-rain btn-rain-outline btn-rain-sm mt-2" id="useLocationBtn">
+            <i class="bi bi-geo-alt dicon" data-dicon="geo-alt"></i> Use my current location
+          </button>
+          <input type="text" class="form-control form-control-rain mt-2 d-none" id="cityOther" placeholder="Type your city / municipality">
+          <div id="locationStatus" class="text-muted-rain mt-1" style="font-size:.8rem;"></div>
+        </div>
+        <div class="mb-3">
+          <label class="form-label-rain" for="regPassword">Password</label>
+          <input type="password" class="form-control form-control-rain" id="regPassword" required minlength="8" autocomplete="new-password">
+        </div>
+        <div class="mb-3">
+          <label class="form-label-rain" for="confirmPassword">Confirm password</label>
+          <input type="password" class="form-control form-control-rain" id="confirmPassword" required minlength="8" autocomplete="new-password">
+        </div>
+        <button type="submit" class="btn-rain btn-rain-primary w-100 justify-content-center mb-3" data-press>
+          <i class="bi bi-person-plus dicon" data-dicon="person-plus"></i> Create Account
+        </button>
+        <p class="text-center text-muted-rain" style="font-size:.9rem;">Already have an account? <a href="login.html" style="color:var(--accent-cyan); font-weight:600;">Sign in</a></p>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/animejs@4.5.0/lib/anime.iife.min.js"></script>
+<script src="assets/js/animations.js"></script>
+<script src="assets/js/icons.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="assets/js/supabase-client.js"></script>
+<script src="assets/js/rain-auth.js"></script>
+<script src="assets/js/offline-store.js"></script>
+<script src="assets/js/main.js"></script>
+<script src="assets/js/taal-places.js"></script>
+<script type="module">
+  const usernameEl = document.getElementById("username");
+  const emailEl = document.getElementById("regEmail");
+  const phoneEl = document.getElementById("regPhone");
+  const cityEl = document.getElementById("city");
+  const cityOtherEl = document.getElementById("cityOther");
+  const locationStatusEl = document.getElementById("locationStatus");
+  const passEl = document.getElementById("regPassword");
+  const confirmEl = document.getElementById("confirmPassword");
+  const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+  // Accepts 09XXXXXXXXX, 639XXXXXXXXX, or +639XXXXXXXXX and normalizes all
+  // of them to E.164 (+639XXXXXXXXX) -- the format the SMS gateway expects.
+  // Returns null if the input isn't a recognizable PH mobile number.
+  function normalizePhPhone(raw) {
+    const digits = String(raw || "").replace(/\D/g, "");
+    if (digits.length === 11 && digits.startsWith("09")) return "+63" + digits.slice(1);
+    if (digits.length === 12 && digits.startsWith("639")) return "+" + digits;
+    if (digits.length === 10 && digits.startsWith("9")) return "+63" + digits;
+    return null;
+  }
+
+  // Populate the City dropdown with places near Taal Volcano (plus the
+  // Laguna/Calamba area) grouped by region, with a trailing "Other" option.
+  TaalPlaces.populateSelect(cityEl);
+
+  // "Other" reveals a free-text fallback for anyone outside the listed area.
+  cityEl.addEventListener("change", () => {
+    const isOther = cityEl.value === TaalPlaces.OTHER_VALUE;
+    cityOtherEl.classList.toggle("d-none", !isOther);
+    if (isOther) cityOtherEl.focus();
+  });
+
+  /** Resolves the form's actual city value, accounting for the "Other" fallback. */
+  function getCityValue() {
+    return cityEl.value === TaalPlaces.OTHER_VALUE ? cityOtherEl.value.trim() : cityEl.value;
+  }
+
+  RainFieldValidation.wireField(usernameEl, (v) => v.trim().length >= 3, "Username must be at least 3 characters.");
+  RainFieldValidation.wireField(emailEl, (v) => emailPattern.test(v.trim()), "Enter a valid email address.");
+  RainFieldValidation.wireField(phoneEl, (v) => normalizePhPhone(v) !== null, "Enter a valid PH mobile number, e.g. 09171234567.");
+  const cityValidation = RainFieldValidation.wireField(cityEl, () => getCityValue().length > 0, "Please select your city.");
+  RainFieldValidation.wireField(cityOtherEl, (v) => cityEl.value !== TaalPlaces.OTHER_VALUE || v.trim().length > 0, "Please type your city or municipality.");
+  RainFieldValidation.wireField(passEl, (v) => v.length >= 8, "Password must be at least 8 characters.");
+  const confirmValidation = RainFieldValidation.wireField(confirmEl, (v) => v.length > 0 && v === passEl.value, "Passwords do not match.");
+  // Re-check "confirm" whenever the primary password changes, since its
+  // validity depends on that field too.
+  passEl.addEventListener("input", () => { if (confirmEl.value) confirmValidation.revalidate(); });
+
+  // "Use my current location" — matches the browser's geolocation reading
+  // to the closest place in TaalPlaces.PLACES. No external geocoding API
+  // is used, so this stays free and works without any additional API key.
+  document.getElementById("useLocationBtn").addEventListener("click", () => {
+    if (!navigator.geolocation) {
+      locationStatusEl.textContent = "Geolocation isn't supported on this browser. Please select manually.";
+      return;
+    }
+    locationStatusEl.textContent = "Locating…";
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const match = TaalPlaces.nearest(pos.coords.latitude, pos.coords.longitude);
+        if (!match) {
+          locationStatusEl.textContent = "Couldn't match your location to a listed area. Please select manually.";
+          return;
+        }
+        if (match.distanceKm <= 40) {
+          cityEl.value = match.place.name;
+          cityOtherEl.classList.add("d-none");
+          locationStatusEl.textContent = `Detected: ${match.place.name} (~${match.distanceKm.toFixed(1)} km away)`;
+        } else {
+          locationStatusEl.textContent = `Closest listed area is ${match.place.name} (~${match.distanceKm.toFixed(0)} km away). Please select the nearest option, or choose "Other" below.`;
+        }
+        cityValidation.forceShow();
+      },
+      () => {
+        locationStatusEl.textContent = "Location access was denied or unavailable. Please select manually.";
+      },
+      { enableHighAccuracy: true, timeout: 8000 }
+    );
+  });
+
+  document.getElementById("registerForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const username = document.getElementById("username").value.trim();
+    const email = document.getElementById("regEmail").value.trim().toLowerCase();
+    const phone = normalizePhPhone(phoneEl.value);
+    const city = getCityValue();
+    const pass = document.getElementById("regPassword").value;
+    const confirm = document.getElementById("confirmPassword").value;
+    const errorBox = document.getElementById("regError");
+    const errorText = document.getElementById("regErrorText");
+    const successBox = document.getElementById("regSuccess");
+    const submitBtn = e.target.querySelector('button[type="submit"]');
+
+    function fail(msg) {
+      errorText.textContent = msg;
+      errorBox.classList.remove("d-none");
+      successBox.classList.add("d-none");
+      RainAnim.animateAlertBanner(errorBox);
+    }
+
+    if (username.length < 3) { usernameEl.focus(); return fail("Username must be at least 3 characters."); }
+    if (!emailPattern.test(email)) { emailEl.focus(); return fail("Please enter a valid email address."); }
+    if (!phone) { phoneEl.focus(); return fail("Please enter a valid PH mobile number, e.g. 09171234567."); }
+    if (!city) { (cityEl.value === TaalPlaces.OTHER_VALUE ? cityOtherEl : cityEl).focus(); return fail("Please select your city, or type it if it's not listed."); }
+    if (pass.length < 8) { passEl.focus(); return fail("Password must be at least 8 characters."); }
+    if (pass !== confirm) { confirmEl.focus(); return fail("Passwords do not match."); }
+
+    // Creates a real Supabase Auth account; a database trigger (see
+    // supabase/schema.sql) auto-creates the matching profiles row with
+    // role = 'resident'. Admin accounts are promoted manually in Supabase.
+    submitBtn.disabled = true;
+    const created = await RainAuth.register({ name: username, email, phone, password: pass, city });
+    submitBtn.disabled = false;
+
+    if (!created || created.error) {
+      return fail(created && created.error ? created.error : "An account with this email already exists, or registration failed. Please try again.");
+    }
+
+    errorBox.classList.add("d-none");
+    successBox.classList.remove("d-none");
+
+    if (created.pendingConfirmation) {
+      // Supabase Auth has "Confirm email" turned on — the account exists
+      // but needs email confirmation before it can sign in. Toggle this
+      // setting in Supabase (Authentication > Providers > Email) if you
+      // want instant sign-in instead, e.g. for a demo.
+      document.getElementById("regSuccess").textContent =
+        "Account created! Check your email to confirm before signing in.";
+      RainAnim.animateAlertBanner(successBox);
+      return;
+    }
+
+    RainAnim.animateAlertBanner(successBox);
+    setTimeout(() => { window.location.href = "login.html"; }, 1400);
+  });
+</script>
+</body>
+</html>

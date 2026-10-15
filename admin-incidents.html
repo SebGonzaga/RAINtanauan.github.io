@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script>(function(){try{var t=localStorage.getItem("rain_theme")||"dark";document.documentElement.setAttribute("data-theme",t);}catch(e){}})();</script>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Incident Reports — RAIN</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
+<link rel="stylesheet" href="assets/css/style.css">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0a1830">
+<link rel="apple-touch-icon" href="assets/icons/icon-192.png">
+</head>
+<body>
+<div id="app-shell-root"></div>
+
+<template id="admin-incidents-content">
+  <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-4">
+    <div>
+      <span class="eyebrow">Resident Reports</span>
+      <h1 style="font-family:var(--font-display); font-weight:700; font-size:1.4rem; color:var(--canvas-heading); margin:.25rem 0 0;">Incident report queue</h1>
+    </div>
+    <div class="d-flex flex-wrap gap-2" id="incidentFilters">
+      <button class="btn-rain btn-rain-ghost btn-rain-sm active-filter" data-filter="all">All</button>
+      <button class="btn-rain btn-rain-ghost btn-rain-sm" data-filter="Pending">Pending</button>
+      <button class="btn-rain btn-rain-ghost btn-rain-sm" data-filter="Reviewed">Reviewed</button>
+      <button class="btn-rain btn-rain-ghost btn-rain-sm" data-filter="Resolved">Resolved</button>
+    </div>
+  </div>
+
+  <div class="d-flex flex-column gap-3" id="incidentsList"></div>
+  <div class="empty-state d-none" id="incidentsEmpty">
+    <div class="glyph"><i class="bi bi-inbox dicon" data-dicon="inbox"></i></div>
+    <div>No incident reports in this category yet.</div>
+  </div>
+</template>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/animejs@4.5.0/lib/anime.iife.min.js"></script>
+<script src="assets/js/animations.js"></script>
+<script src="assets/js/icons.js"></script>
+<script src="assets/js/demo-data.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="assets/js/supabase-client.js"></script>
+<script src="assets/js/rain-auth.js"></script>
+<script src="assets/js/offline-store.js"></script>
+<script src="assets/js/main.js"></script>
+<script type="module">
+  await RainAuth.init();
+  const user = renderAppShell("admin-incidents.html", { title: "Incident Reports" });
+  if (user && !RainAuth.isAdmin(user)) { window.location.href = "dashboard.html"; }
+
+  const statusTone = { Pending: "status-warning", Reviewed: "status-caution", Resolved: "status-safe" };
+  const typeIcon = { Ashfall: "bi-cloud-haze2", "Ground cracks": "bi-layers", "Gas smell": "bi-wind", Flooding: "bi-water", Landslide: "bi-layers", "Earthquake damage": "bi-activity", Other: "bi-flag" };
+
+  // UI shows "Pending / Reviewed / Resolved"; the DB enum (see
+  // supabase/schema.sql) uses "pending / verified / resolved / dismissed".
+  const STATUS_DB_TO_UI = { pending: "Pending", verified: "Reviewed", resolved: "Resolved", dismissed: "Dismissed" };
+  const STATUS_UI_TO_DB = { Pending: "pending", Reviewed: "verified", Resolved: "resolved" };
+
+  function fmt(ts) {
+    if (!ts) return "—";
+    const d = new Date(ts);
+    return isNaN(d) ? ts : d.toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+  }
+
+  // Same fix as admin-users.html: PostgREST caps a single request at 1000
+  // rows, so a plain .select() would silently truncate once incidents
+  // passed that count, drifting from the dashboard's exact count() total.
+  // Page through until a short page tells us we've hit the end.
+  const FETCH_PAGE_SIZE = 1000;
+  async function fetchIncidents() {
+    const all = [];
+    let from = 0;
+    while (true) {
+      const { data, error } = await sb
+        .from("incidents")
+        .select("*, profiles(full_name)")
+        .order("created_at", { ascending: false })
+        .range(from, from + FETCH_PAGE_SIZE - 1);
+      if (error) { console.error("Fetch incidents error:", error); return all; }
+      all.push(...data);
+      if (data.length < FETCH_PAGE_SIZE) break;
+      from += FETCH_PAGE_SIZE;
+    }
+    return all.map((inc) => ({
+      id: inc.id,
+      type: inc.category,
+      description: inc.description,
+      location: inc.area,
+      reportedAt: inc.created_at,
+      reporterName: inc.profiles?.full_name || "Resident",
+      status: STATUS_DB_TO_UI[inc.status] || "Pending",
+      photoUrl: inc.photo_url,
+    }));
+  }
+
+  async function renderIncidents(filter) {
+    const list = document.getElementById("incidentsList");
+    const empty = document.getElementById("incidentsEmpty");
+    const all = await fetchIncidents();
+    const items = filter === "all" ? all : all.filter((i) => i.status === filter);
+    list.innerHTML = "";
+    empty.classList.toggle("d-none", items.length > 0);
+
+    items.forEach((inc) => {
+      const el = document.createElement("div");
+      el.className = "rain-card reveal-on-scroll";
+      el.style.opacity = "1";
+      el.innerHTML = `
+        <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-2">
+          <div class="d-flex align-items-center gap-2">
+            <span class="icon-chip tone-warning"><i class="bi ${typeIcon[inc.type] || "bi-flag"}"></i></span>
+            <div>
+              <strong>${inc.type || "Incident"}</strong>
+              <div class="cell-muted" style="font-size:.78rem;">Reported by ${inc.reporterName || "Resident"} · ${fmt(inc.reportedAt)}</div>
+            </div>
+          </div>
+          <span class="status-badge ${statusTone[inc.status] || "status-warning"}">${inc.status}</span>
+        </div>
+        <p style="font-size:.9rem; margin-bottom:.6rem;">${inc.description || "No description provided."}</p>
+        ${inc.photoUrl ? `<a href="${inc.photoUrl}" target="_blank" rel="noopener"><img src="${inc.photoUrl}" alt="Incident photo" style="max-width:220px; max-height:160px; border-radius:8px; object-fit:cover; margin-bottom:.6rem; display:block;"></a>` : ""}
+        <div class="data-source-line mb-3">
+          <i class="bi bi-geo-alt"></i> ${inc.location || "Location not provided"}
+        </div>
+        <div class="d-flex flex-wrap gap-2">
+          <button type="button" class="btn-rain btn-rain-ghost btn-rain-sm" data-status="Pending" data-id="${inc.id}">Mark Pending</button>
+          <button type="button" class="btn-rain btn-rain-ghost btn-rain-sm" data-status="Reviewed" data-id="${inc.id}">Mark Reviewed</button>
+          <button type="button" class="btn-rain btn-rain-primary btn-rain-sm" data-status="Resolved" data-id="${inc.id}">Mark Resolved</button>
+        </div>`;
+      list.appendChild(el);
+    });
+  }
+
+  function initAdminIncidentsPage() {
+    document.getElementById("app-content").appendChild(document.getElementById("admin-incidents-content").content.cloneNode(true));
+    initializeAnimations();
+    renderIncidents("all");
+
+    document.querySelectorAll("#incidentFilters button").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        document.querySelectorAll("#incidentFilters button").forEach((b) => b.classList.remove("active-filter"));
+        btn.classList.add("active-filter");
+        renderIncidents(btn.dataset.filter);
+      });
+    });
+
+    document.getElementById("incidentsList").addEventListener("click", async (e) => {
+      const btn = e.target.closest("[data-status]");
+      if (!btn) return;
+      const dbStatus = STATUS_UI_TO_DB[btn.dataset.status];
+      const { error } = await sb.from("incidents").update({ status: dbStatus }).eq("id", btn.dataset.id);
+      if (error) { console.error("Update incident error:", error); rainToast("Could not update status", "bi-exclamation-triangle"); return; }
+      const activeFilter = document.querySelector("#incidentFilters .active-filter").dataset.filter;
+      renderIncidents(activeFilter);
+      rainToast("Report marked " + btn.dataset.status, "bi-check-circle");
+    });
+  }
+
+  if (user && RainAuth.isAdmin(user)) initAdminIncidentsPage();
+</script>
+<style>.active-filter{background:var(--navy-950); color:#fff; border-color:var(--navy-950);}</style>
+</body>
+</html>

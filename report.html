@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script>(function(){try{var t=localStorage.getItem("rain_theme")||"dark";document.documentElement.setAttribute("data-theme",t);}catch(e){}})();</script>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Report Incident — RAIN</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
+<link rel="stylesheet" href="assets/css/style.css">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0a1830">
+<link rel="apple-touch-icon" href="assets/icons/icon-192.png">
+</head>
+<body>
+<div id="app-shell-root"></div>
+
+<template id="report-content">
+  <div class="row justify-content-center">
+    <div class="col-lg-7">
+      <div class="rain-card reveal-on-scroll">
+        <div id="reportSuccess" class="alert-banner level-info mb-3 d-none" style="opacity:1;">
+          <i class="bi bi-check-circle icon dicon" data-dicon="check-circle"></i>
+          <div><strong>Incident Report Submitted</strong><div style="font-size:.85rem;">Disaster response officials will review your report shortly.</div></div>
+        </div>
+
+        <form id="reportForm">
+          <div class="mb-3">
+            <label class="form-label-rain">Incident Type</label>
+            <select class="form-select form-control-rain" id="incidentType" required>
+              <option value="">Select incident type...</option>
+              <option>Ashfall</option>
+              <option>Ground cracks</option>
+              <option>Gas smell</option>
+              <option>Flooding</option>
+              <option>Landslide</option>
+              <option>Earthquake damage</option>
+              <option>Other</option>
+            </select>
+          </div>
+          <div class="mb-3">
+            <label class="form-label-rain">Description</label>
+            <textarea class="form-control form-control-rain" id="incidentDesc" rows="4" required placeholder="Describe what you observed..."></textarea>
+          </div>
+          <div class="mb-3">
+            <label class="form-label-rain">Photo (optional)</label>
+            <input type="file" class="form-control form-control-rain" id="incidentPhoto" accept="image/*">
+          </div>
+          <div class="mb-3">
+            <label class="form-label-rain">Location</label>
+            <div class="d-flex gap-2">
+              <input type="text" class="form-control form-control-rain" id="incidentLocation" placeholder="Detecting location..." readonly>
+              <button type="button" class="btn-rain btn-rain-ghost btn-rain-sm" id="getLocationBtn" aria-label="Detect my current location"><i class="bi bi-geo-alt dicon" data-dicon="geo-alt"></i></button>
+            </div>
+          </div>
+          <div class="mb-4">
+            <label class="form-label-rain">Date/Time</label>
+            <input type="text" class="form-control form-control-rain" id="incidentTime" readonly>
+          </div>
+          <button type="submit" class="btn-rain btn-rain-primary w-100 justify-content-center" id="submitReportBtn" data-press>
+            <i class="bi bi-flag dicon" data-dicon="flag"></i> Submit Report
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+</template>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/animejs@4.5.0/lib/anime.iife.min.js"></script>
+<script src="assets/js/animations.js"></script>
+<script src="assets/js/icons.js"></script>
+<script src="assets/js/demo-data.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="assets/js/supabase-client.js"></script>
+<script src="assets/js/rain-auth.js"></script>
+<script src="assets/js/offline-store.js"></script>
+<script src="assets/js/main.js"></script>
+<script type="module">
+  await RainAuth.init();
+  const user = renderAppShell("report.html", { title: "Report Incident" });
+
+  function initReportPage() {
+    document.getElementById("app-content").appendChild(document.getElementById("report-content").content.cloneNode(true));
+    initializeAnimations();
+
+    document.getElementById("incidentTime").value = new Date().toLocaleString();
+
+    document.getElementById("getLocationBtn").addEventListener("click", () => {
+      const field = document.getElementById("incidentLocation");
+      if (!navigator.geolocation) { field.value = "Location unavailable"; return; }
+      field.value = "Detecting…";
+      navigator.geolocation.getCurrentPosition(
+        (pos) => { field.value = `${pos.coords.latitude.toFixed(5)}, ${pos.coords.longitude.toFixed(5)}`; },
+        () => { field.value = "Permission denied"; }
+      );
+    });
+    document.getElementById("getLocationBtn").click();
+
+    RainFieldValidation.wireField(
+      document.getElementById("incidentType"),
+      (v) => v.length > 0,
+      "Please select an incident type."
+    );
+    RainFieldValidation.wireField(
+      document.getElementById("incidentDesc"),
+      (v) => v.trim().length >= 10,
+      "Please describe what you observed (at least 10 characters)."
+    );
+
+    document.getElementById("reportForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const btn = document.getElementById("submitReportBtn");
+      const photoInput = document.getElementById("incidentPhoto");
+      const type = document.getElementById("incidentType").value;
+      const locationText = document.getElementById("incidentLocation").value;
+
+      // The "Location" field holds "lat, lng" when geolocation succeeded,
+      // or a fallback string ("Permission denied", etc.) otherwise. Parse
+      // out coordinates when present; the raw text is always kept as the
+      // human-readable "area" regardless.
+      let lat = null, lng = null;
+      const coordMatch = locationText.match(/^(-?\d+(?:\.\d+)?),\s*(-?\d+(?:\.\d+)?)$/);
+      if (coordMatch) { lat = parseFloat(coordMatch[1]); lng = parseFloat(coordMatch[2]); }
+
+      btn.disabled = true;
+      btn.innerHTML = `<span class="spinner-border spinner-border-sm"></span> Submitting...`;
+
+      // Photo is optional. Upload it into a per-user folder in the
+      // "incident-photos" bucket (see supabase/004_*.sql) before the
+      // insert, then store the public URL on the row so admin-incidents.html
+      // can display it.
+      let photoUrl = null;
+      const file = photoInput.files[0];
+      if (file) {
+        const ext = file.name.includes(".") ? file.name.split(".").pop() : "jpg";
+        const path = `${user.id}/${Date.now()}.${ext}`;
+        const { error: uploadError } = await sb.storage.from("incident-photos").upload(path, file);
+        if (uploadError) {
+          console.error("Photo upload error:", uploadError);
+          rainToast("Report will be submitted, but the photo failed to upload", "bi-exclamation-triangle");
+        } else {
+          photoUrl = sb.storage.from("incident-photos").getPublicUrl(path).data.publicUrl;
+        }
+      }
+
+      const { error } = await sb.from("incidents").insert({
+        reporter_id: user.id,
+        title: `${type || "Incident"} reported`,
+        description: document.getElementById("incidentDesc").value.trim(),
+        category: type,
+        area: locationText,
+        lat, lng,
+        photo_url: photoUrl,
+      });
+
+      btn.disabled = false;
+      btn.innerHTML = `<i class="bi bi-flag dicon" data-dicon="flag"></i> Submit Report`;
+
+      if (error) {
+        console.error("Incident submit error:", error);
+        rainToast("Could not submit report — please try again", "bi-exclamation-triangle");
+        return;
+      }
+
+      document.getElementById("reportForm").reset();
+      document.getElementById("incidentTime").value = new Date().toLocaleString();
+      document.getElementById("getLocationBtn").click();
+      const success = document.getElementById("reportSuccess");
+      success.classList.remove("d-none");
+      RainAnim.animateAlertBanner(success);
+      rainToast("Incident report submitted", "bi-check-circle");
+    });
+  }
+
+  if (user) initReportPage();
+</script>
+</body>
+</html>

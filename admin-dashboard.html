@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script>(function(){try{var t=localStorage.getItem("rain_theme")||"dark";document.documentElement.setAttribute("data-theme",t);}catch(e){}})();</script>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Admin Dashboard — RAIN</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
+<link rel="stylesheet" href="assets/css/style.css">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0a1830">
+<link rel="apple-touch-icon" href="assets/icons/icon-192.png">
+</head>
+<body>
+<div id="app-shell-root"></div>
+
+<template id="admin-content">
+  <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-4">
+    <div>
+      <span class="eyebrow">RAIN Command Center</span>
+      <h1 style="font-family:var(--font-display); font-weight:700; font-size:1.4rem; color:var(--canvas-heading); margin:.25rem 0 0;">Operations Overview</h1>
+    </div>
+    <span class="freshness" style="color:var(--canvas-muted);"><span class="live-badge"><span class="dot pulse-dot"></span>LIVE</span> · <span id="adminUpdated">Updated just now</span></span>
+  </div>
+
+  <div class="row g-3 mb-4">
+    <div class="col-6 col-lg-3">
+      <div class="rain-card rain-card-dark reveal-on-scroll">
+        <div class="card-eyebrow"><span>Total Users</span><span class="icon-chip tone-cyan"><i class="bi bi-people dicon" data-dicon="people"></i></span></div>
+        <h3 class="card-num" id="statTotalUsers" data-count-to="0">0</h3>
+      </div>
+    </div>
+    <div class="col-6 col-lg-3">
+      <div class="rain-card rain-card-dark reveal-on-scroll">
+        <div class="card-eyebrow"><span>Active Alerts</span><span class="icon-chip tone-warning"><i class="bi bi-bell dicon" data-dicon="bell"></i></span></div>
+        <h3 class="card-num" id="statActiveAlerts" data-count-to="0">0</h3>
+      </div>
+    </div>
+    <div class="col-6 col-lg-3">
+      <div class="rain-card rain-card-dark reveal-on-scroll">
+        <div class="card-eyebrow"><span>Incident Reports</span><span class="icon-chip tone-critical"><i class="bi bi-flag dicon" data-dicon="flag"></i></span></div>
+        <h3 class="card-num" id="statIncidents" data-count-to="0">0</h3>
+        <div class="cell-muted" id="statPendingNote" style="font-size:.78rem;"></div>
+      </div>
+    </div>
+    <div class="col-6 col-lg-3">
+      <div class="rain-card rain-card-dark reveal-on-scroll">
+        <div class="card-eyebrow"><span>Volcanoes Monitored</span><span class="icon-chip tone-safe"><i class="bi bi-triangle dicon" data-dicon="triangle"></i></span></div>
+        <h3 class="card-num" id="statVolcanoes" data-count-to="0">0</h3>
+      </div>
+    </div>
+  </div>
+
+  <div class="row g-4">
+    <div class="col-lg-6">
+      <div class="rain-card reveal-on-scroll">
+        <div class="card-eyebrow"><span>User Registrations</span></div>
+        <canvas id="regChart" height="180"></canvas>
+      </div>
+    </div>
+    <div class="col-lg-6">
+      <div class="rain-card reveal-on-scroll">
+        <div class="card-eyebrow"><span>Chatbot Usage</span></div>
+        <canvas id="chatChart" height="180"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <div class="rain-card reveal-on-scroll mt-4">
+    <div class="card-eyebrow"><span>Quick actions</span></div>
+    <div class="d-flex flex-wrap gap-2">
+      <a href="admin-alerts.html" class="btn-rain btn-rain-primary btn-rain-sm" data-press><i class="bi bi-bell dicon" data-dicon="bell"></i> Publish an alert</a>
+      <a href="admin-incidents.html" class="btn-rain btn-rain-ghost btn-rain-sm" data-press><i class="bi bi-flag dicon" data-dicon="flag"></i> Review incident reports</a>
+      <a href="admin-users.html" class="btn-rain btn-rain-ghost btn-rain-sm" data-press><i class="bi bi-people dicon" data-dicon="people"></i> Manage users</a>
+      <a href="admin-analytics.html" class="btn-rain btn-rain-ghost btn-rain-sm" data-press><i class="bi bi-bar-chart dicon" data-dicon="bar-chart"></i> View analytics</a>
+    </div>
+  </div>
+</template>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/animejs@4.5.0/lib/anime.iife.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<script src="assets/js/animations.js"></script>
+<script src="assets/js/icons.js"></script>
+<script src="assets/js/demo-data.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="assets/js/supabase-client.js"></script>
+<script src="assets/js/rain-auth.js"></script>
+<script src="assets/js/offline-store.js"></script>
+<script src="assets/js/main.js"></script>
+<script type="module">
+  await RainAuth.init();
+  const user = renderAppShell("admin-dashboard.html", { title: "Admin Dashboard" });
+  if (user && !RainAuth.isAdmin(user)) { window.location.href = "dashboard.html"; }
+  if (user && RainAuth.isAdmin(user)) {
+    document.getElementById("app-content").appendChild(document.getElementById("admin-content").content.cloneNode(true));
+    initializeAnimations();
+    document.getElementById("adminUpdated").textContent = "Updated " + new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+
+    // Real counts from Supabase instead of hardcoded numbers — this is the
+    // same data admin-users.html, admin-alerts.html, and admin-incidents.html
+    // read and write, so this overview never drifts from what's actually
+    // in the system.
+    //
+    // NOTE: this used to use { count: "exact", head: true } requests, but
+    // those were coming back empty (Total Users / Incident Reports showed
+    // 0 even though real rows existed — visible from the fact that the
+    // User Registrations chart, which fetches actual rows, plotted them
+    // correctly). HEAD-only count requests are the one thing that broke;
+    // plain row fetches + .length works, so every stat below now uses
+    // that instead, for both correctness and consistency with how
+    // admin-users.html / admin-incidents.html compute their own totals.
+    const [usersRes, alertsRes, incidentsRes, chatLogsRes] = await Promise.all([
+      sb.from("profiles").select("id, created_at"),
+      sb.from("alerts").select("id, expires_at"),
+      sb.from("incidents").select("id, status"),
+      sb.from("chat_logs").select("created_at"),
+    ]);
+    if (usersRes.error) console.error("Fetch profiles error:", usersRes.error);
+    if (alertsRes.error) console.error("Fetch alerts error:", alertsRes.error);
+    if (incidentsRes.error) console.error("Fetch incidents error:", incidentsRes.error);
+
+    const profiles = usersRes.data || [];
+    const alerts = alertsRes.data || [];
+    const incidents = incidentsRes.data || [];
+
+    const totalUsers = profiles.length;
+    // "Active" means published and not yet expired — a straight row count
+    // would include alerts whose expires_at has already passed.
+    const nowIso = new Date().toISOString();
+    const activeAlerts = alerts.filter((a) => a.expires_at && a.expires_at > nowIso).length;
+    const totalIncidents = incidents.length;
+    const pendingIncidents = incidents.filter((i) => i.status === "pending").length;
+    // Volcano monitoring is still frontend demo data (see demo-data.js),
+    // so this reads the same array volcano.html renders instead of a
+    // hardcoded number that would silently drift if that list changes.
+    const volcanoesMonitored = (typeof RAIN_DEMO !== "undefined" && RAIN_DEMO.volcanoes) ? RAIN_DEMO.volcanoes.length : 0;
+
+    document.querySelector('[data-count-to]#statTotalUsers').setAttribute("data-count-to", totalUsers);
+    document.querySelector('[data-count-to]#statActiveAlerts').setAttribute("data-count-to", activeAlerts);
+    document.querySelector('[data-count-to]#statIncidents').setAttribute("data-count-to", totalIncidents);
+    document.querySelector('[data-count-to]#statVolcanoes').setAttribute("data-count-to", volcanoesMonitored);
+    document.getElementById("statPendingNote").textContent = pendingIncidents + " pending review";
+
+    // initializeAnimations() (called above, before this fetch resolved)
+    // already watched these cards scroll into view and animated them to
+    // whatever data-count-to said at that instant — almost always "0",
+    // the HTML placeholder, since these cards are above the fold and the
+    // Supabase fetch hadn't finished yet. That IntersectionObserver has
+    // since unsubscribed itself and won't fire again, so now that the
+    // real numbers are set above, re-run the counter animation on each
+    // card directly rather than relying on it to notice the change.
+    document.querySelectorAll("#statTotalUsers, #statActiveAlerts, #statIncidents, #statVolcanoes").forEach((el) => RainAnim.animateCounter(el));
+
+    // Buckets rows by calendar month over the last N months, keyed off
+    // each row's created_at — used for both charts below.
+    function countByMonth(rows, months) {
+      const buckets = [];
+      const now = new Date();
+      for (let i = months - 1; i >= 0; i--) {
+        const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+        buckets.push({ key: `${d.getFullYear()}-${d.getMonth()}`, label: d.toLocaleString([], { month: "short" }), count: 0 });
+      }
+      (rows || []).forEach((r) => {
+        const d = new Date(r.created_at);
+        const key = `${d.getFullYear()}-${d.getMonth()}`;
+        const bucket = buckets.find((b) => b.key === key);
+        if (bucket) bucket.count++;
+      });
+      return buckets;
+    }
+
+    const regBuckets = countByMonth(profiles, 6);
+    const chatBuckets = countByMonth(chatLogsRes.data, 6);
+
+    new Chart(document.getElementById("regChart"), {
+      type: "line",
+      data: { labels: regBuckets.map((b) => b.label), datasets: [{ label: "New users", data: regBuckets.map((b) => b.count), borderColor:"#33c9d1", backgroundColor:"rgba(51,201,209,.15)", fill:true, tension:.35 }] },
+      options: { plugins: { legend: { display:false } }, scales: { y: { beginAtZero: true, ticks: { precision: 0 } } } },
+    });
+    new Chart(document.getElementById("chatChart"), {
+      type: "bar",
+      data: { labels: chatBuckets.map((b) => b.label), datasets: [{ label: "Conversations", data: chatBuckets.map((b) => b.count), backgroundColor:"#2c5581", borderRadius:6 }] },
+      options: { plugins: { legend: { display:false } }, scales: { y: { beginAtZero: true, ticks: { precision: 0 } } } },
+    });
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script>(function(){try{var t=localStorage.getItem("rain_theme")||"dark";document.documentElement.setAttribute("data-theme",t);}catch(e){}})();</script>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Emergency — RAIN</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="stylesheet" href="assets/css/style.css">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0a1830">
+<link rel="apple-touch-icon" href="assets/icons/icon-192.png">
+</head>
+<body>
+<div id="app-shell-root"></div>
+
+<template id="emergency-content">
+  <div class="rain-card rain-card-dark reveal-on-scroll mb-4 d-flex flex-wrap align-items-center justify-content-between gap-3" style="background:linear-gradient(160deg, rgba(216,57,74,.3), transparent), linear-gradient(160deg, var(--navy-800), var(--navy-950) 75%); border-color:rgba(216,57,74,.35);">
+    <div>
+      <div class="card-eyebrow" style="margin-bottom:.4rem;"><span>Active threat nearby?</span></div>
+      <div style="font-family:var(--font-display); font-weight:700; font-size:1.15rem;">Switch to Emergency Mode for a simplified, action-only view.</div>
+    </div>
+    <button type="button" class="btn-emergency" style="width:auto;" id="activateEmergencyBtn" data-press><i class="bi bi-broadcast dicon" data-dicon="broadcast"></i> ACTIVATE EMERGENCY MODE</button>
+  </div>
+
+  <div class="rain-card reveal-on-scroll mb-4">
+    <div class="card-eyebrow"><span>Emergency Contacts</span></div>
+    <div class="row g-3" id="contactGrid"></div>
+  </div>
+
+  <div class="rain-card reveal-on-scroll" id="evac">
+    <div class="card-eyebrow"><span>Evacuation Centers</span><span class="demo-data-tag" style="background:var(--accent-cyan); color:#fff;">Source: Tanauan City CDRRMO</span></div>
+    <div class="d-flex align-items-center gap-2 mb-3" id="evacLocNote" style="font-size:.78rem; color:var(--ink-400);"></div>
+    <div class="map-filter-row mb-3" id="evacFilters">
+      <button class="map-filter-btn light active" data-filter="all">All</button>
+      <button class="map-filter-btn light" data-filter="shelter"><span class="legend-dot dot-shelter"></span> Shelters &amp; Schools</button>
+      <button class="map-filter-btn light" data-filter="government"><span class="legend-dot dot-government"></span> Barangay &amp; City Halls</button>
+      <button class="map-filter-btn light" data-filter="mall"><span class="legend-dot dot-mall"></span> SM Malls</button>
+    </div>
+    <div class="map-frame mb-3"><div id="evac-map"></div></div>
+    <div class="d-flex flex-column gap-3" id="evacList"></div>
+  </div>
+</template>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/animejs@4.5.0/lib/anime.iife.min.js"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="assets/js/animations.js"></script>
+<script src="assets/js/icons.js"></script>
+<script src="assets/js/demo-data.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="assets/js/supabase-client.js"></script>
+<script src="assets/js/rain-auth.js"></script>
+<script src="assets/js/offline-store.js"></script>
+<script src="assets/js/main.js"></script>
+<script type="module">
+  await RainAuth.init();
+  // CARTO Basemaps API key — required since CARTO deprecated anonymous
+  // keyless raster tile access (tiles otherwise render stamped "API KEY
+  // REQUIRED"). Like a Mapbox access token, this is meant to ship in
+  // client-side code and isn't a secret that needs server-side hiding.
+  const CARTO_API_KEY = "cb1_3qde_1_313d908e961a073e7e5de450";
+  const user = renderAppShell("emergency.html", { title: "Emergency" });
+
+  // haversineKm() now lives in assets/js/main.js — shared across pages.
+  function initEmergencyPage() {
+    document.getElementById("app-content").appendChild(document.getElementById("emergency-content").content.cloneNode(true));
+
+    document.getElementById("activateEmergencyBtn").addEventListener("click", () => RainEmergencyMode.open());
+
+    const contactGrid = document.getElementById("contactGrid");
+    const iconMap = { Police: "bi-shield-lock", Fire: "bi-fire", Medical: "bi-heart-pulse", NDRRMC: "bi-diagram-3" };
+    // Emergency contacts don't change often, but save them anyway so the
+    // "SOS" quick-dial numbers are guaranteed available offline even if a
+    // resident never scrolls this page before losing connection.
+    RainOffline.save("emergencyContacts", RAIN_DEMO.emergencyContacts);
+    RAIN_DEMO.emergencyContacts.forEach((c) => {
+      const col = document.createElement("div");
+      col.className = "col-6 col-md-3";
+      col.innerHTML = `
+        <div class="text-center p-3" style="border:1px solid var(--surface-line); border-radius:14px;">
+          <i class="bi ${iconMap[c.tag] || "bi-telephone"} fs-3 mb-2 dicon-in-view bi-anim" style="color:var(--status-critical);"></i>
+          <div style="font-size:.82rem; color:var(--ink-600); margin-bottom:.6rem;">${c.name}</div>
+          <a href="tel:${c.number.replace(/[^\d+]/g, "")}" class="btn-emergency" data-press><i class="bi bi-telephone-fill dicon-in-view bi-anim"></i> CALL ${c.number}</a>
+        </div>`;
+      contactGrid.appendChild(col);
+    });
+
+    // Fallback used only if the browser has no geolocation support, the user
+    // denies the permission prompt, or the request times out — same pattern
+    // and demo point (Tanauan City, Batangas) as dashboard.html. Never presented as
+    // if it were the user's real GPS reading.
+    const FALLBACK_LAT = 14.0863, FALLBACK_LNG = 121.1497;
+    let evacMap = null;
+
+    // Category → { marker icon class/glyph, list badge label } so shelters,
+    // government buildings (barangay/city/municipal halls), and SM malls
+    // that accept evacuees are all visually distinct on the map and list.
+    const CATEGORY_META = {
+      shelter: { icon: "bi-house-heart-fill", label: "Shelter" },
+      government: { icon: "bi-bank2", label: "Government" },
+      mall: { icon: "bi-shop", label: "Mall" },
+    };
+
+    function renderEvacSection(userLat, userLng, isRealLocation) {
+      const locNote = document.getElementById("evacLocNote");
+      const offlineSuffix = RainOffline.isOnline() ? "" : ` <span class="cached-data-tag"><i class="bi bi-cloud-slash"></i> Offline</span>`;
+      locNote.innerHTML = (isRealLocation
+        ? `<i class="bi bi-geo-alt-fill" style="color:var(--accent-cyan);"></i> Distances are from your current location.`
+        : `<i class="bi bi-geo-alt"></i> GPS unavailable — showing distances from Tanauan City, Batangas. <button type="button" class="btn-rain btn-rain-ghost btn-rain-sm" id="retryLocationBtn" style="padding:.1rem .6rem; margin-left:.3rem;">Enable location</button>`) + offlineSuffix;
+      if (!isRealLocation) {
+        document.getElementById("retryLocationBtn").addEventListener("click", requestLocation);
+      }
+
+      if (evacMap) evacMap.remove(); // re-render (e.g. after "Enable location") needs a fresh Leaflet instance on the same container
+      const map = L.map("evac-map").setView([userLat, userLng], 11);
+      evacMap = map;
+      L.tileLayer(`https://basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png?key=${CARTO_API_KEY}`, { attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>', maxZoom: 20 }).addTo(map);
+      L.marker([userLat, userLng], { icon: rainPinIcon("user", "bi-person-fill"), title: "You are here" })
+        .addTo(map)
+        .bindPopup(isRealLocation ? "Your location" : "Approximate location (GPS unavailable — showing Tanauan City, Batangas)");
+
+      const evacList = document.getElementById("evacList");
+      evacList.innerHTML = "";
+      const categoryLayers = { shelter: L.layerGroup(), government: L.layerGroup(), mall: L.layerGroup() };
+      const listItemsByCategory = { shelter: [], government: [], mall: [] };
+
+      const sortedCenters = RAIN_DEMO.evacuationCenters
+        .map((c) => ({ ...c, dist: haversineKm(userLat, userLng, c.lat, c.lng) }))
+        .sort((a, b) => a.dist - b.dist);
+
+      // Snapshot the nearest-first list (with real distances) so the app
+      // shell's offline reminder can name the closest evacuation center
+      // even after this page is closed and the connection drops.
+      RainOffline.save("evacuationCenters", sortedCenters);
+
+      sortedCenters.forEach((c) => {
+          const cat = c.category || "shelter";
+          const meta = CATEGORY_META[cat] || CATEGORY_META.shelter;
+
+          L.marker([c.lat, c.lng], { icon: rainPinIcon(cat, meta.icon) })
+            .addTo(categoryLayers[cat])
+            .bindPopup(`<strong>${c.name}</strong><br>${c.type || meta.label}<br>${c.address}`);
+
+          const el = document.createElement("div");
+          el.className = "d-flex justify-content-between align-items-start gap-3 reveal-on-scroll";
+          el.style.cssText = "border-bottom:1px solid var(--surface-line); padding-bottom:1rem;";
+          el.innerHTML = `
+            <div>
+              <div style="font-weight:700; color:var(--navy-950);">${c.name}<span class="evac-type-badge ${cat}">${c.type || meta.label}</span></div>
+              <div style="font-size:.85rem; color:var(--ink-600);">${c.address}</div>
+              <div style="font-size:.8rem; color:var(--ink-400);"><i class="bi bi-telephone"></i> ${c.contact} · ${c.facilities}</div>
+            </div>
+            <div class="text-end flex-shrink-0">
+              <div style="font-weight:700; color:var(--accent-cyan);">${c.dist.toFixed(1)} km</div>
+              <a class="btn-rain btn-rain-ghost btn-rain-sm mt-1" target="_blank" rel="noopener" href="https://www.openstreetmap.org/directions?to=${c.lat},${c.lng}"><i class="bi bi-signpost-split"></i> Directions</a>
+            </div>`;
+          evacList.appendChild(el);
+          listItemsByCategory[cat].push(el);
+        });
+
+      if (!sortedCenters.length) {
+        evacList.innerHTML = '<p class="text-muted-rain mb-0">The evacuation center list from the Tanauan City CDRRMO is not available yet. Please contact the CDRRMO or your barangay hall for the nearest evacuation center.</p>';
+      }
+
+      Object.values(categoryLayers).forEach((layer) => layer.addTo(map));
+
+      document.querySelectorAll("#evacFilters .map-filter-btn").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          document.querySelectorAll("#evacFilters .map-filter-btn").forEach((b) => b.classList.remove("active"));
+          btn.classList.add("active");
+          const f = btn.dataset.filter;
+          Object.entries(categoryLayers).forEach(([cat, layer]) => {
+            const show = f === "all" || f === cat;
+            if (show && !map.hasLayer(layer)) layer.addTo(map);
+            else if (!show && map.hasLayer(layer)) map.removeLayer(layer);
+            listItemsByCategory[cat].forEach((el) => { el.style.display = show ? "" : "none"; });
+          });
+        });
+      });
+
+      initializeAnimations();
+      setTimeout(() => map.invalidateSize(), 200);
+    }
+
+    // Resolve the user's real location before drawing the map/list, so the
+    // "km away" figures reflect where they actually are, not a fixed demo
+    // point. Falls back to Tanauan City, Batangas if geolocation is unsupported,
+    // denied, or times out (see FALLBACK_LAT/LNG above).
+    function requestLocation() {
+      const locNote = document.getElementById("evacLocNote");
+      locNote.innerHTML = `<i class="bi bi-geo-alt"></i> Locating you…`;
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          (pos) => renderEvacSection(pos.coords.latitude, pos.coords.longitude, true),
+          () => renderEvacSection(FALLBACK_LAT, FALLBACK_LNG, false),
+          { timeout: 8000 }
+        );
+      } else {
+        renderEvacSection(FALLBACK_LAT, FALLBACK_LNG, false);
+      }
+    }
+    requestLocation();
+  }
+
+  if (user) initEmergencyPage();
+</script>
+</body>
+</html>
