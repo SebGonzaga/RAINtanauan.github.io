@@ -55,3 +55,5 @@ create policy "admin moderate mosquito reports" on mosquito_reports for update u
 create view mosquito_reports_public as
   select id, report_type, barangay, observed_on, lat, lng, created_at from mosquito_reports where status = 'verified';
 grant select on mosquito_reports_public to authenticated;
+-- Supabase's default privileges can also expose new views to the logged-out (anon) role; keep this view for signed-in users only.
+revoke all on mosquito_reports_public from anon;

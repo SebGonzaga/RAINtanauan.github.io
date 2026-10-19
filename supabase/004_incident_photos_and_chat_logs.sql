@@ -48,3 +48,9 @@ create policy "insert own chat log" on chat_logs
   for insert with check (auth.uid() = user_id);
 create policy "admin read chat logs" on chat_logs
   for select using (is_admin());
+
+-- Harden the public photo bucket: images only, max 10 MB (the browser's accept="image/*" is only a hint and can be bypassed).
+update storage.buckets
+   set file_size_limit = 10485760,
+       allowed_mime_types = array['image/jpeg','image/png','image/webp']
+ where id = 'incident-photos';

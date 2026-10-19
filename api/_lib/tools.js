@@ -28,8 +28,8 @@ const VOLCVIEW = 'https://volcview.wr.usgs.gov/vv-api/volcanoApi/wwvolcanoes';
 
 // Same project URL / publishable key as assets/js/supabase-client.js. The
 // publishable key is public by design (it grants nothing beyond RLS).
-const SUPABASE_URL = process.env.SUPABASE_URL || 'https://ajvjxqdylnysmvlajvdr.supabase.co';
-const SUPABASE_KEY = process.env.SUPABASE_PUBLISHABLE_KEY || 'sb_publishable_jgfGCr4QV6bJCppnEG8Pew_jwuGP472';
+const SUPABASE_URL = process.env.SUPABASE_URL || 'https://aadnjjohcysykhrggigj.supabase.co';
+const SUPABASE_KEY = process.env.SUPABASE_PUBLISHABLE_KEY || 'sb_publishable_YmAqdnXTPA7QWEp7WxbdLQ_6ZM6mr8q';
 
 // Mirrors volcano.html (TAAL_VNUM / TAAL_FALLBACK) and main.js (PH_QUAKE_BBOX).
 const TAAL = { vnum: '273070', lat: 14.0021, lng: 120.9932, elevM: 311 };
