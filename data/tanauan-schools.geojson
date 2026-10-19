@@ -1,0 +1,1 @@
+{"type":"FeatureCollection","_meta":{"dataset":"Schools (Point)","status":"EMPTY - awaiting authoritative data","source":"TODO: LGU/CDRRMO, NAMRIA or Geoportal Philippines","crs":"must be WGS84 (EPSG:4326), [lng, lat]","verifiedOn":null,"properties":"name, address, source, verification ('official' | 'unverified'), verifiedOn"},"features":[]}

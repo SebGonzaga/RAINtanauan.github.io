@@ -82,21 +82,22 @@
     </div>
   </div>
 
-  <div class="rain-card reveal-on-scroll mb-4">
-    <div class="card-eyebrow"><span>Alert Level Reference</span><span class="demo-data-tag">REFERENCE, NOT LIVE</span></div>
-    <p style="font-size:.87rem; color:var(--ink-600);">
-      Taal's official 0–5 Alert Level is issued by PHIVOLCS, which doesn't publish a public API — so this app can't pull it live.
-      The last publicly known level is shown below for context only. <strong>Always check PHIVOLCS directly for the current advisory
-      before making any decisions.</strong>
-    </p>
-    <div class="d-flex align-items-center gap-3">
-      <div class="level-chip status-caution" style="width:2.5rem;height:2.5rem;display:flex;align-items:center;justify-content:center;font-weight:700;border-radius:50%;">1</div>
-      <div>
-        <div style="font-weight:700; color:var(--navy-950);">Low-Level Unrest</div>
-        <div style="font-size:.82rem; color:var(--ink-600);">Sudden steam-driven (phreatic) or minor phreatomagmatic eruptions, volcanic gas expulsions, and ashfall can occur without further warning. The entire Taal Volcano Island is a Permanent Danger Zone.</div>
-      </div>
-    </div>
+  <div class="rain-card mb-4" id="aiDigestVolcano" style="font-size:.85rem;"></div>
+  <div class="rain-card reveal-on-scroll mb-4" id="vsCard">
+    <div class="card-eyebrow"><span>Official PHIVOLCS alert level (copied by RAIN administrators)</span><span class="demo-data-tag" style="background:#0f766e">OFFICIAL SOURCE · HUMAN-ENTERED</span></div>
+    <div id="vsBody" style="font-size:.87rem;">Loading…</div>
+    <div class="text-muted-rain mt-2" style="font-size:.78rem;">PHIVOLCS does not offer a public data feed this app can read, so an administrator copies the current alert level here. The official PHIVOLCS bulletin and instructions always take priority over this page.</div>
     <div class="data-source-line"><i class="bi bi-box-arrow-up-right dicon" data-dicon="box-arrow-up-right"></i> <a href="https://www.phivolcs.dost.gov.ph/" target="_blank" rel="noopener">Check the current advisory at phivolcs.dost.gov.ph &rarr;</a></div>
+    <div class="data-source-line"><i class="bi bi-wind"></i> <a href="air-quality.html">Air quality near Tanauan (modeled; not a Taal gas measurement) &rarr;</a></div>
+    <form id="vsForm" class="row g-2 mt-2 d-none" style="font-size:.82rem;" autocomplete="off">
+      <div class="col-12"><b>Admin: enter the current PHIVOLCS bulletin</b></div>
+      <div class="col-6 col-md-3"><label class="form-label mb-0">Alert level (0-5) *</label><input type="number" min="0" max="5" step="1" class="form-control form-control-sm" id="vsLevel" required></div>
+      <div class="col-6 col-md-4"><label class="form-label mb-0">Bulletin issued (as printed) *</label><input type="datetime-local" class="form-control form-control-sm" id="vsIssued" required></div>
+      <div class="col-12 col-md-5"><label class="form-label mb-0">Bulletin link (https) *</label><input type="url" class="form-control form-control-sm" id="vsUrl" required maxlength="500" placeholder="https://www.phivolcs.dost.gov.ph/..."></div>
+      <div class="col-12"><label class="form-label mb-0">Headline (as printed)</label><input class="form-control form-control-sm" id="vsHead" maxlength="200"></div>
+      <div class="col-12"><label class="form-label mb-0">Short summary</label><textarea class="form-control form-control-sm" id="vsSum" rows="2" maxlength="2000"></textarea></div>
+      <div class="col-12 d-flex gap-2 align-items-center"><button class="btn-rain btn-rain-primary btn-rain-sm" type="submit">Publish</button><button class="btn-rain btn-rain-ghost btn-rain-sm d-none" type="button" id="vsDelete">Delete shown entry</button><span id="vsMsg" class="text-muted"></span></div>
+    </form>
   </div>
 
   <div class="rain-card reveal-on-scroll">
@@ -122,6 +123,7 @@
 <script src="assets/js/rain-auth.js"></script>
 <script src="assets/js/offline-store.js"></script>
 <script src="assets/js/main.js"></script>
+<script src="assets/js/ai-digest-card.js"></script>
 <script type="module">
   await RainAuth.init();
   // CARTO Basemaps API key — required since CARTO deprecated anonymous
@@ -246,6 +248,50 @@
     }
   }
 
+
+  // --- Official PHIVOLCS alert level (admin-entered, supabase/009_volcano_status.sql)
+  const LEVEL_NAMES = { 0: "Normal", 1: "Low-level unrest", 2: "Moderate level of unrest", 3: "Magmatic unrest", 4: "Hazardous eruption imminent", 5: "Hazardous eruption in progress" };
+  const vsEsc = (v) => String(v == null ? "" : v).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const vsFmt = (t) => new Date(t).toLocaleString("en-PH", { timeZone: "Asia/Manila", month: "short", day: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: false }) + " PHT";
+  let vsShownId = null;
+  async function loadVolcanoStatus() {
+    const body = document.getElementById("vsBody"), badge = document.getElementById("tvAlertBadge");
+    vsShownId = null; document.getElementById("vsDelete").classList.add("d-none");
+    const { data, error } = await sb.from("volcano_status").select("*").eq("volcano", "Taal").order("bulletin_issued_at", { ascending: false }).limit(1);
+    if (error) { console.warn("volcano_status", error); body.textContent = "Could not load the alert level (the volcano_status table may not be set up yet). Check PHIVOLCS directly."; return; }
+    if (!data.length) { body.innerHTML = "No alert level has been entered yet. <b>Check PHIVOLCS directly for the current level.</b>"; badge.innerHTML = '<span class="dot pulse-dot"></span>Alert Level not entered'; return; }
+    const v = data[0]; vsShownId = v.id;
+    if (RainAuth.isAdmin(RainAuth.getUser())) document.getElementById("vsDelete").classList.remove("d-none");
+    const ageD = (Date.now() - new Date(v.bulletin_issued_at).getTime()) / 86400000;
+    const safeUrl = /^https:\/\//.test(v.source_url) ? v.source_url : null;
+    badge.innerHTML = '<span class="dot pulse-dot"></span>Alert Level ' + vsEsc(v.alert_level) + (ageD > 3 ? " (check for updates)" : "");
+    body.innerHTML = (ageD > 3 ? `<div class="mb-2" style="color:#b45309;font-weight:600;">Stale warning: this bulletin is ${Math.floor(ageD)} days old. PHIVOLCS may have issued a newer one; check the official site.</div>` : "") +
+      `<div class="d-flex align-items-center gap-3"><div class="status-caution" style="width:2.5rem;height:2.5rem;display:flex;align-items:center;justify-content:center;font-weight:700;border-radius:50%;">${vsEsc(v.alert_level)}</div>` +
+      `<div><div style="font-weight:700;">${vsEsc(LEVEL_NAMES[v.alert_level] || "")}</div><div class="text-muted-rain" style="font-size:.8rem;">Bulletin issued ${vsEsc(vsFmt(v.bulletin_issued_at))}</div></div></div>` +
+      (v.headline ? `<div class="mt-2"><b>${vsEsc(v.headline)}</b></div>` : "") + (v.summary ? `<p class="mt-1 mb-1">${vsEsc(v.summary)}</p>` : "") +
+      `<div style="font-size:.78rem;">` + (safeUrl ? `<a href="${vsEsc(safeUrl)}" target="_blank" rel="noopener noreferrer">Open the PHIVOLCS bulletin</a>` : "No valid source link") + ` &middot; Level names follow PHIVOLCS' 0&ndash;5 scale.</div>`;
+  }
+  function initVolcanoStatusForm() {
+    if (!RainAuth.isAdmin(RainAuth.getUser())) return;
+    const f = document.getElementById("vsForm"), msg = document.getElementById("vsMsg"); f.classList.remove("d-none");
+    f.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const g = (id) => document.getElementById(id).value.trim(), issued = new Date(document.getElementById("vsIssued").value), lvl = Number(g("vsLevel"));
+      if (!Number.isInteger(lvl) || lvl < 0 || lvl > 5 || isNaN(issued)) { msg.textContent = "Check the level (0-5) and issue time."; return; }
+      if (!/^https:\/\//.test(g("vsUrl"))) { msg.textContent = "Link must start with https://"; return; }
+      const { data: au } = await sb.auth.getUser();
+      const { error } = await sb.from("volcano_status").insert({ created_by: au && au.user ? au.user.id : null, volcano: "Taal", alert_level: lvl, bulletin_issued_at: issued.toISOString(), headline: g("vsHead") || null, summary: g("vsSum") || null, source_url: g("vsUrl") });
+      if (error) { console.error(error); msg.textContent = "Could not save: " + error.message; return; }
+      msg.textContent = "Published."; f.reset(); loadVolcanoStatus();
+    });
+    document.getElementById("vsDelete").addEventListener("click", async () => {
+      if (!vsShownId || !confirm("Delete the alert-level entry currently shown?")) return;
+      const { error } = await sb.from("volcano_status").delete().eq("id", vsShownId);
+      if (error) { rainToast("Could not delete", "bi-exclamation-triangle"); return; }
+      loadVolcanoStatus();
+    });
+  }
+
   async function initVolcanoPage() {
     document.getElementById("app-content").appendChild(document.getElementById("volcano-content").content.cloneNode(true));
 
@@ -255,6 +301,8 @@
     });
 
     initializeAnimations();
+    initVolcanoStatusForm();
+    loadVolcanoStatus();
 
     const loc = await loadLocation();
     window.__taalLoc = loc;
@@ -262,6 +310,7 @@
   }
 
   if (user) initVolcanoPage();
+  RainDigest.mount("aiDigestVolcano", "volcano");
 </script>
 </body>
 </html>

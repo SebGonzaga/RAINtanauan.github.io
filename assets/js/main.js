@@ -11,6 +11,11 @@ const RAIN_NAV = {
     { section: "Monitor", links: [
       { href: "dashboard.html", icon: "bi-grid-1x2", label: "Dashboard" },
       { href: "weather.html", icon: "bi-cloud-sun", label: "Weather" },
+      { href: "heat-index.html", icon: "bi-thermometer-sun", label: "Heat Index" },
+      { href: "air-quality.html", icon: "bi-wind", label: "Air Quality" },
+      { href: "typhoon-map.html", icon: "bi-tropical-storm", label: "Typhoon & Satellite" },
+      { href: "flood-landslide.html", icon: "bi-water", label: "Flood & Landslide" },
+      { href: "mosquito.html", icon: "bi-bug", label: "Mosquito Watch" },
       { href: "volcano.html", icon: "bi-fire", label: "Volcano Monitoring" },
       { href: "earthquake.html", icon: "bi-activity", label: "Earthquake" },
     ]},
@@ -28,6 +33,11 @@ const RAIN_NAV = {
     { section: "Monitor", links: [
       { href: "admin-dashboard.html", icon: "bi-grid-1x2", label: "Dashboard" },
       { href: "weather.html", icon: "bi-cloud-sun", label: "Weather" },
+      { href: "heat-index.html", icon: "bi-thermometer-sun", label: "Heat Index" },
+      { href: "air-quality.html", icon: "bi-wind", label: "Air Quality" },
+      { href: "typhoon-map.html", icon: "bi-tropical-storm", label: "Typhoon & Satellite" },
+      { href: "flood-landslide.html", icon: "bi-water", label: "Flood & Landslide" },
+      { href: "mosquito.html", icon: "bi-bug", label: "Mosquito Watch" },
       { href: "volcano.html", icon: "bi-fire", label: "Volcano Monitoring" },
       { href: "earthquake.html", icon: "bi-activity", label: "Earthquake" },
     ]},
@@ -257,6 +267,10 @@ const RainFieldValidation = {
  *  alerts/incidents *as that user* (Row Level Security applies), plus their
  *  saved area as the default location for weather/shelter lookups. */
 const RainChatAPI = {
+  /** Optional device location the person chose to share in this browser session (rounded to ~100 m). */
+  loc() {
+    try { const o = JSON.parse(sessionStorage.getItem("rainChatLoc") || "null"); return o && Number.isFinite(o.lat) && Number.isFinite(o.lng) ? { lat: o.lat, lng: o.lng } : {}; } catch (e) { return {}; }
+  },
   async sendFull(message, { lang = "en", history = [] } = {}) {
     const headers = { "Content-Type": "application/json" };
     try {
@@ -283,7 +297,7 @@ const RainChatAPI = {
           message,
           lang,
           history: history.slice(-10).map((m) => ({ role: m.role, content: m.message })),
-          context: { city },
+          context: { city, ...RainChatAPI.loc() },
         }),
       });
     } finally {

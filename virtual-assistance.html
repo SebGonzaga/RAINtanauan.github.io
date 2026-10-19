@@ -29,6 +29,7 @@
           <button type="button" data-lang="en" class="active">EN</button>
           <button type="button" data-lang="fil">FIL</button>
         </div>
+        <button type="button" class="btn-rain btn-rain-ghost btn-rain-sm" id="useLocBtn" aria-pressed="false" title="Share your approximate location with the assistant for this browser session"><i class="bi bi-geo-alt"></i> <span>Use my location</span></button>
         <button type="button" class="btn-rain btn-rain-ghost btn-rain-sm" id="clearChatBtn" aria-label="Clear chat" data-press><i class="bi bi-trash3 dicon" data-dicon="trash3"></i> <span class="btn-label">Clear Chat</span></button>
       </div>
     </div>
@@ -554,6 +555,25 @@
   }
 
   if (user) initVaPage();
+</script>
+<script>
+  // "Use my location": asks the browser once, keeps a ~100 m rounded point in sessionStorage only (cleared when the tab closes).
+  (function () {
+    var tries = 0, t = setInterval(function () {
+      var b = document.getElementById("useLocBtn");
+      if (!b) { if (++tries > 40) clearInterval(t); return; }
+      clearInterval(t);
+      var on = function (v) { b.setAttribute("aria-pressed", v ? "true" : "false"); b.querySelector("span").textContent = v ? "Using my location" : "Use my location"; };
+      on(!!sessionStorage.getItem("rainChatLoc"));
+      b.addEventListener("click", function () {
+        if (sessionStorage.getItem("rainChatLoc")) { sessionStorage.removeItem("rainChatLoc"); on(false); return; }
+        if (!navigator.geolocation) { b.querySelector("span").textContent = "Location not supported"; return; }
+        navigator.geolocation.getCurrentPosition(function (p) {
+          sessionStorage.setItem("rainChatLoc", JSON.stringify({ lat: +p.coords.latitude.toFixed(3), lng: +p.coords.longitude.toFixed(3) })); on(true);
+        }, function () { b.querySelector("span").textContent = "Location blocked"; }, { timeout: 8000 });
+      });
+    }, 250);
+  })();
 </script>
 </body>
 </html>

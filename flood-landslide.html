@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script>(function(){try{var t=localStorage.getItem("rain_theme")||"dark";document.documentElement.setAttribute("data-theme",t);}catch(e){}})();</script>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Flood &amp; Landslide — RAIN</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="stylesheet" href="assets/css/style.css">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0a1830">
+<link rel="apple-touch-icon" href="assets/icons/icon-192.png">
+</head>
+<body>
+<div id="app-shell-root"></div>
+
+<template id="fl-content">
+  <div class="mb-3"><span class="eyebrow">Hazard monitoring</span>
+    <h1 style="font-family:var(--font-display);font-weight:700;font-size:1.4rem;color:var(--canvas-heading);margin:.25rem 0 0;">Flood &amp; Landslide Map — Tanauan City</h1></div>
+  <div class="rain-card mb-3" style="font-size:.85rem;border-left:4px solid #b45309;">
+    <b>How to read this map.</b> Susceptibility layers show where conditions make flooding or landslides <i>more likely</i> in general. They are <b>not</b> live flood
+    depth, not a forecast, and do not say when or whether an event will happen. Community reports are unverified unless marked otherwise.
+    Follow official LGU/CDRRMO, PAGASA and PHIVOLCS advisories.
+    <a href="flood-landslide-3d.html" class="ms-2"><b>View in 3D terrain →</b></a>
+  </div>
+  <div class="row g-3 mb-4">
+    <div class="col-lg-8"><div class="rain-card p-2"><div id="flMap" style="height:540px;min-height:360px;border-radius:8px;"></div></div></div>
+    <div class="col-lg-4"><div class="rain-card" id="flLayers" style="font-size:.82rem;"></div></div>
+  </div>
+  <div class="rain-card mb-4" style="font-size:.82rem;"><b>Layers not available yet</b>
+    <ul class="mb-0 mt-2" id="flMissing"></ul></div>
+  <div class="rain-card" style="font-size:.78rem;"><b>Sources &amp; limitations.</b> Flood and landslide susceptibility are served live by the
+    Philippine Geoportal / UlAP hazards server (<code>ulap-hazards.georisk.gov.ph</code>) from Mines and Geosciences Bureau (MGB) data. Check the service pages for scale, licensing and
+    update status before relying on them. The layers are drawn as image overlays and cannot be queried by clicking. If a layer fails to load, the status line under its toggle says so.
+    This page is inspired by Project NOAH's hazard-mapping approach but does <b>not</b> use NOAH data. Basemaps: &copy; OpenStreetMap contributors; satellite &copy; Esri, Maxar, Earthstar Geographics.</div>
+</template>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/animejs@4.5.0/lib/anime.iife.min.js"></script>
+<script src="assets/js/animations.js"></script>
+<script src="assets/js/icons.js"></script>
+<script src="assets/js/demo-data.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="assets/js/supabase-client.js"></script>
+<script src="assets/js/rain-auth.js"></script>
+<script src="assets/js/offline-store.js"></script>
+<script src="assets/js/main.js"></script>
+<script type="module">
+  await RainAuth.init();
+  const user = renderAppShell("flood-landslide.html", { title: "Flood & Landslide" });
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const BASE = "https://ulap-hazards.georisk.gov.ph/arcgis/rest/services/MGBPublic/";
+  const LAYERS = [
+    { key: "flood", label: "Flood susceptibility", kind: "HAZARD SUSCEPTIBILITY", url: BASE + "Flood/MapServer", on: true,
+      info: "MGB classes: Low (≤0.5 m, 1–3 days), Moderate (0.5–1 m, 1–3 days), High (1–2 m, >3 days), Very High (>2 m, >3 days). Source data dated July 2018 per service metadata. Colors are as drawn by the source service." },
+    { key: "slide", label: "Rain-induced landslide susceptibility", kind: "HAZARD SUSCEPTIBILITY", url: BASE + "RainInducedLandslide/MapServer", on: false,
+      info: "MGB data dated 2012 from the READY Project. Low / Moderate / High susceptibility; high areas have active or recent landslides and tension cracks. Colors are as drawn by the source service." },
+  ];
+  const MISSING = ["Rainfall observations (no verified station API integrated)", "River networks and water bodies", "Elevation and terrain",
+    "Flood depth / inundation scenarios (no programmatic Project NOAH service verified)", "Official flood advisories (PAGASA)", "Barangay boundaries (data file still empty; see data/SOURCES.md)"];
+  $("app-content").appendChild($("fl-content").content.cloneNode(true));
+  $("flMissing").innerHTML = MISSING.map((m) => "<li>" + esc(m) + "</li>").join("");
+  if (!user) throw new Error("not signed in");
+
+  const map = L.map("flMap").setView([14.0863, 121.1497], 12); // approximate city center, for view only
+  const osm = L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19, attribution: "&copy; OpenStreetMap contributors" }).addTo(map);
+  const sat = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", { maxZoom: 19, attribution: "Tiles &copy; Esri, Maxar, Earthstar Geographics" });
+  L.control.layers({ "Street map": osm, "Satellite": sat }, null, { position: "topright" }).addTo(map);
+
+  // Draws an ArcGIS MapServer through its public /export endpoint as image tiles (plain <img>, no CORS needed).
+  function arcgisLayer(url, onStatus) {
+    let ok = 0, bad = 0;
+    const Lyr = L.GridLayer.extend({
+      createTile(coords, done) {
+        const img = document.createElement("img"), b = this._tileCoordsToBounds(coords), P = L.CRS.EPSG3857;
+        const sw = P.project(b.getSouthWest()), ne = P.project(b.getNorthEast());
+        img.alt = ""; img.style.opacity = this.options.opacity;
+        img.onload = () => { ok++; onStatus(ok, bad); done(null, img); };
+        img.onerror = () => { bad++; onStatus(ok, bad); done(null, img); };
+        img.src = `${url}/export?bbox=${sw.x},${sw.y},${ne.x},${ne.y}&bboxSR=3857&imageSR=3857&size=256,256&format=png32&transparent=true&f=image`;
+        return img;
+      },
+    });
+    return new Lyr({ opacity: 0.6, minZoom: 8, attribution: "Hazard data: MGB via Philippine Geoportal/UlAP" });
+  }
+
+  const panel = $("flLayers");
+  panel.innerHTML = '<b>Layers</b><div class="mt-2" id="flList"></div><label class="mt-2 d-block">Overlay opacity <input type="range" id="flOp" min="20" max="100" value="60" class="form-range"></label>';
+  const layers = {};
+  function row(def, extra) {
+    return `<div class="mb-3"><label><input type="checkbox" data-k="${def.key}" ${def.on ? "checked" : ""}> <b>${esc(def.label)}</b></label>
+      <div><span class="demo-data-tag" style="background:#b45309">${esc(def.kind)}</span></div>
+      <div id="st-${def.key}" class="text-muted">Loading…</div><div>${esc(def.info)}</div></div>`;
+  }
+  const REPORTS = { key: "reports", label: "Community flood/landslide reports (last 30 days)", kind: "COMMUNITY REPORT · UNVERIFIED UNLESS MARKED", on: true,
+    info: "Submitted by residents through the Report page. Only reports with saved coordinates appear. Shows what RLS lets your account read." };
+  $("flList").innerHTML = LAYERS.concat([REPORTS]).map(row).join("");
+  const setSt = (k, t) => { $("st-" + k).textContent = t; };
+
+  LAYERS.forEach((d) => {
+    layers[d.key] = arcgisLayer(d.url, (ok, bad) => setSt(d.key, bad > 4 && ok === 0 ? "Failed to load from the source server" : ok ? "Loaded (tiles drawn: " + ok + (bad ? ", failed: " + bad : "") + ")" : "Loading…"));
+    if (d.on) layers[d.key].addTo(map);
+  });
+  layers.reports = L.layerGroup();
+  async function loadReports() {
+    try {
+      const since = new Date(Date.now() - 30 * 864e5).toISOString();
+      const { data, error } = await sb.from("incidents").select("id,category,area,description,status,created_at,lat,lng")
+        .in("category", ["Flooding", "Landslide"]).neq("status", "dismissed").gte("created_at", since).not("lat", "is", null).not("lng", "is", null).limit(500);
+      if (error) throw error;
+      (data || []).forEach((r) => {
+        if (!(r.lat >= 4 && r.lat <= 21.5 && r.lng >= 116 && r.lng <= 127.5)) return;
+        L.circleMarker([r.lat, r.lng], { radius: 8, color: "#fff", weight: 2, fillColor: r.category === "Flooding" ? "#2563eb" : "#92400e", fillOpacity: 0.95 })
+          .bindPopup(`<b>${esc(r.category)}</b> · ${r.status === "pending" ? "Unverified report" : "Reviewed by admin"}<br>${esc(r.area)}<br><small>${esc(new Date(r.created_at).toLocaleString())}</small><br>${esc((r.description || "").slice(0, 200))}`)
+          .addTo(layers.reports);
+      });
+      setSt("reports", data && data.length ? data.length + " report(s) shown (blue = flooding, brown = landslide)" : "No reports with coordinates in the last 30 days");
+    } catch (e) { console.warn("reports", e); setSt("reports", "Could not load reports"); }
+  }
+  layers.reports.addTo(map); loadReports();
+
+  panel.addEventListener("change", (e) => {
+    const k = e.target.dataset && e.target.dataset.k; if (!k) return;
+    e.target.checked ? layers[k].addTo(map) : map.removeLayer(layers[k]);
+  });
+  $("flOp").addEventListener("input", (e) => LAYERS.forEach((d) => { const v = e.target.value / 100; layers[d.key].options.opacity = v; layers[d.key].getContainer() && (layers[d.key].getContainer().style.opacity = v); }));
+</script>
+</body>
+</html>

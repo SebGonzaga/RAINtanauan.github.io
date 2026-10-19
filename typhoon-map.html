@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script>(function(){try{var t=localStorage.getItem("rain_theme")||"dark";document.documentElement.setAttribute("data-theme",t);}catch(e){}})();</script>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Typhoon &amp; Satellite Map — RAIN</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="stylesheet" href="assets/css/style.css">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0a1830">
+<link rel="apple-touch-icon" href="assets/icons/icon-192.png">
+</head>
+<body>
+<div id="app-shell-root"></div>
+
+<template id="tm-content">
+  <div class="mb-3"><span class="eyebrow">Weather watch</span>
+    <h1 style="font-family:var(--font-display);font-weight:700;font-size:1.4rem;color:var(--canvas-heading);margin:.25rem 0 0;">Typhoon &amp; Satellite Map</h1></div>
+  <div class="rain-card mb-3" style="border-left:4px solid #b45309;font-size:.85rem;">
+    <b>Read this first.</b> This map shows <b>observed satellite cloud imagery</b> and <b>model-based weather layers</b>. It does <b>not</b> show the official PAGASA
+    storm position, forecast track or warnings, and it does not predict landfall. For official tropical cyclone information go to
+    <a href="https://www.pagasa.dost.gov.ph/tropical-cyclone/severe-weather-bulletin" target="_blank" rel="noopener">PAGASA's severe weather bulletin</a>.
+  </div>
+  <div class="rain-card mb-3" id="tmBulletin">
+    <div class="card-eyebrow"><span>Official PAGASA bulletin (copied by RAIN administrators)</span><span class="demo-data-tag" style="background:#0f766e">OFFICIAL SOURCE · HUMAN-ENTERED</span></div>
+    <div id="tbBody" class="text-muted" style="font-size:.88rem;">Loading…</div>
+  </div>
+  <div class="rain-card mb-3 d-none" id="tbAdmin">
+    <div class="card-eyebrow"><span>Admin: enter the current PAGASA bulletin</span></div>
+    <form id="tbForm" class="row g-2" style="font-size:.82rem;" autocomplete="off">
+      <div class="col-6 col-md-3"><label class="form-label mb-0">Storm name *</label><input class="form-control form-control-sm" id="tbName" required maxlength="60"></div>
+      <div class="col-6 col-md-3"><label class="form-label mb-0">Bulletin no.</label><input class="form-control form-control-sm" id="tbNo" maxlength="30"></div>
+      <div class="col-6 col-md-3"><label class="form-label mb-0">Issued (as printed) *</label><input type="datetime-local" class="form-control form-control-sm" id="tbIssued" required></div>
+      <div class="col-6 col-md-3"><label class="form-label mb-0">Show until *</label><input type="datetime-local" class="form-control form-control-sm" id="tbExpires" required></div>
+      <div class="col-6 col-md-3"><label class="form-label mb-0">Center latitude</label><input type="number" step="0.01" min="-90" max="90" class="form-control form-control-sm" id="tbLat"></div>
+      <div class="col-6 col-md-3"><label class="form-label mb-0">Center longitude</label><input type="number" step="0.01" min="-180" max="180" class="form-control form-control-sm" id="tbLng"></div>
+      <div class="col-6 col-md-3"><label class="form-label mb-0">Intensity (as printed)</label><input class="form-control form-control-sm" id="tbInt" maxlength="80"></div>
+      <div class="col-6 col-md-3"><label class="form-label mb-0">Max winds (km/h)</label><input type="number" min="0" max="450" class="form-control form-control-sm" id="tbWind"></div>
+      <div class="col-12 col-md-6"><label class="form-label mb-0">Movement (as printed)</label><input class="form-control form-control-sm" id="tbMove" maxlength="120"></div>
+      <div class="col-12 col-md-6"><label class="form-label mb-0">Bulletin link (https) *</label><input type="url" class="form-control form-control-sm" id="tbUrl" required maxlength="500" placeholder="https://www.pagasa.dost.gov.ph/..."></div>
+      <div class="col-12"><label class="form-label mb-0">Wind-signal areas (as printed)</label><textarea class="form-control form-control-sm" id="tbSig" rows="2" maxlength="1500"></textarea></div>
+      <div class="col-12"><label class="form-label mb-0">Short summary</label><textarea class="form-control form-control-sm" id="tbSum" rows="2" maxlength="1500"></textarea></div>
+      <div class="col-12"><label class="d-flex align-items-center gap-2"><input type="checkbox" id="tbAlertOn"> Also post a resident Alert (off by default)</label>
+        <div id="tbAlertBox" class="row g-2 mt-1 d-none">
+          <div class="col-6 col-md-3"><label class="form-label mb-0">Alert severity</label><select class="form-select form-select-sm" id="tbAlertSev"><option value="advisory">Advisory</option><option value="warning">Warning</option><option value="critical">Critical</option></select></div>
+          <div class="col-6 col-md-9"><label class="form-label mb-0">Alert area *</label><input class="form-control form-control-sm" id="tbAlertArea" maxlength="120" placeholder="e.g. Tanauan City, Batangas"></div>
+          <div class="col-12 text-muted" style="font-size:.74rem;color:#b45309 !important;">Publishing an Alert notifies residents (including by email if your notification webhook is set up). Check the text on the Alerts page afterward. The alert will cite this bulletin and link to PAGASA; it will not add any forecast of its own.</div>
+        </div></div>
+      <div class="col-12 d-flex gap-2 align-items-center"><button class="btn-rain btn-rain-primary btn-rain-sm" type="submit">Publish bulletin</button><button class="btn-rain btn-rain-ghost btn-rain-sm d-none" type="button" id="tbDelete">Delete shown bulletin</button><span id="tbMsg" class="text-muted"></span></div>
+      <div class="col-12 text-muted" style="font-size:.74rem;">Copy values exactly from PAGASA. Do not estimate or adjust positions. Entering a bulletin does not send notifications; use Alerts for that.</div>
+    </form>
+  </div>
+  <div class="rain-card mb-3">
+    <div class="d-flex flex-wrap gap-2 align-items-center mb-2" id="tmControls" style="font-size:.82rem;">
+      <label class="d-flex align-items-center gap-1"><input type="checkbox" id="tmSat" checked> Satellite loop (infrared)</label>
+      <label class="d-flex align-items-center gap-1"><input type="checkbox" id="tmClouds"> Cloud cover (model)</label>
+      <label class="d-flex align-items-center gap-1"><input type="checkbox" id="tmWind"> Wind speed (model)</label>
+      <label class="d-flex align-items-center gap-1"><input type="checkbox" id="tmRain"> Rain (model)</label>
+      <label class="d-flex align-items-center gap-1"><input type="checkbox" id="tmPres"> Pressure (model)</label>
+      <label class="d-flex align-items-center gap-1 ms-auto">Base map <select id="tmBase" class="form-select form-select-sm"><option value="street">Street</option><option value="sat">Satellite photo</option></select></label>
+    </div>
+    <div style="position:relative;"><div id="tm-map" style="height:min(70vh,560px);min-height:340px;width:100%;background:#0b1220;border-radius:10px;"></div></div>
+    <div class="d-flex flex-wrap gap-2 align-items-center mt-2" id="tmPlayer" style="font-size:.82rem;">
+      <button type="button" class="btn-rain btn-rain-primary btn-rain-sm" id="tmPlay"><i class="bi bi-play-fill"></i> Play</button>
+      <input type="range" id="tmSlider" min="0" max="0" value="0" style="flex:1;min-width:140px;" aria-label="Satellite frame">
+      <span id="tmFrameTime" style="min-width:190px;text-align:right;">—</span>
+    </div>
+    <div id="tmStatus" class="text-muted mt-1" style="font-size:.78rem;"></div>
+  </div>
+  <div class="rain-card" style="font-size:.8rem;">
+    <b>Layer types and limitations</b>
+    <ul class="mt-2 mb-0">
+      <li><b>Satellite loop:</b> <span class="demo-data-tag" style="background:#0f766e">OBSERVED</span> Himawari AHI Band 13 clean infrared (cold cloud tops appear bright), via NASA GIBS. Frames are 30 minutes apart over the last 6 hours, shown in Philippine time. Imagery can lag real time; frames that fail to load are skipped and counted below the map.</li>
+      <li><b>Cloud, wind, rain, pressure:</b> <span class="demo-data-tag" style="background:#b45309">MODEL / BLENDED</span> OpenWeatherMap Weather Maps tiles, current conditions. The wind layer shows speed as color only, with no direction arrows. These are not station observations.</li>
+      <li><b>Not included:</b> official storm position and track, wind-signal areas, landfall alerts. No verified public PAGASA data feed is integrated.</li>
+      <li><b>Credits:</b> Himawari imagery &copy; JMA/Japan Meteorological Agency, distributed via NASA GIBS/EOSDIS; weather tiles &copy; OpenWeatherMap; street map &copy; OpenStreetMap contributors &copy; CARTO; satellite photo base &copy; Esri and its data providers.</li>
+    </ul>
+  </div>
+</template>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/animejs@4.5.0/lib/anime.iife.min.js"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="assets/js/animations.js"></script>
+<script src="assets/js/icons.js"></script>
+<script src="assets/js/demo-data.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="assets/js/supabase-client.js"></script>
+<script src="assets/js/rain-auth.js"></script>
+<script src="assets/js/offline-store.js"></script>
+<script src="assets/js/main.js"></script>
+<script type="module">
+  await RainAuth.init();
+  const user = renderAppShell("typhoon-map.html", { title: "Typhoon & Satellite Map" });
+  const $ = (id) => document.getElementById(id);
+  const CARTO_API_KEY = "cb1_3qde_1_313d908e961a073e7e5de450"; // same client-side CARTO key the other RAIN maps use
+  // GIBS tile matrix for this layer was not verified from the build sandbox; if frames stay blank, adjust MATRIX/MAX_NATIVE_ZOOM.
+  const GIBS_LAYER = "Himawari_AHI_Band13_Clean_Infrared_v0_NRT_ZENJPEG", MATRIX = "GoogleMapsCompatible_Level6", MAX_NATIVE_ZOOM = 6;
+  const STEP_MIN = 30, FRAMES = 12, LAG_MIN = 60; // newest frame is requested LAG_MIN minutes behind "now" so tiles exist
+  const pad = (n) => String(n).padStart(2, "0");
+  const iso = (d) => d.getUTCFullYear() + "-" + pad(d.getUTCMonth() + 1) + "-" + pad(d.getUTCDate()) + "T" + pad(d.getUTCHours()) + ":" + pad(d.getUTCMinutes()) + ":00Z";
+
+  function frameTimes() {
+    const end = new Date(Math.floor((Date.now() - LAG_MIN * 60000) / (STEP_MIN * 60000)) * STEP_MIN * 60000);
+    return Array.from({ length: FRAMES }, (_, i) => new Date(end.getTime() - (FRAMES - 1 - i) * STEP_MIN * 60000));
+  }
+  const phTime = (d) => d.toLocaleString("en-PH", { timeZone: "Asia/Manila", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: false }) + " PHT · " + pad(d.getUTCHours()) + ":" + pad(d.getUTCMinutes()) + " UTC";
+
+  function init() {
+    $("app-content").appendChild($("tm-content").content.cloneNode(true));
+    const map = L.map("tm-map", { zoomControl: true, minZoom: 3, maxZoom: 12 }).setView([13.0, 123.0], 5);
+    const street = L.tileLayer("https://basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png?key=" + CARTO_API_KEY, { attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>', maxZoom: 20 });
+    const photo = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", { maxZoom: 19, attribution: "Tiles &copy; Esri &mdash; Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community" });
+    street.addTo(map);
+    L.marker([14.0863, 121.1497], { title: "Tanauan City (approximate center)" }).addTo(map).bindPopup("<b>Tanauan City, Batangas</b><br><small>Approximate city center for orientation only.</small>");
+    L.control.scale({ imperial: false }).addTo(map);
+    map.attributionControl.addAttribution("Himawari imagery &copy; JMA via NASA GIBS; weather tiles &copy; OpenWeatherMap");
+
+    // --- model layers via server proxy (key stays server-side)
+    const owm = (layer, opacity) => L.tileLayer("/api/owm-tile?layer=" + layer + "&z={z}&x={x}&y={y}", { opacity, maxNativeZoom: 8, maxZoom: 12, attribution: "" });
+    const models = { tmClouds: owm("clouds_new", 0.7), tmWind: owm("wind_new", 0.7), tmRain: owm("precipitation_new", 0.8), tmPres: owm("pressure_new", 0.6) };
+    Object.entries(models).forEach(([id, layer]) => $(id).addEventListener("change", (e) => e.target.checked ? layer.addTo(map) : map.removeLayer(layer)));
+    $("tmBase").addEventListener("change", (e) => { if (e.target.value === "sat") { map.removeLayer(street); photo.addTo(map).bringToBack(); } else { map.removeLayer(photo); street.addTo(map).bringToBack(); } });
+
+    // --- satellite animation: one tile layer per frame, preloaded, opacity-switched
+    const times = frameTimes(), layers = [], errs = new Array(FRAMES).fill(0), loads = new Array(FRAMES).fill(0);
+    let idx = FRAMES - 1, timer = null;
+    times.forEach((t, i) => {
+      const url = "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/" + GIBS_LAYER + "/default/" + iso(t) + "/" + MATRIX + "/{z}/{y}/{x}.jpg";
+      const l = L.tileLayer(url, { opacity: 0, maxNativeZoom: MAX_NATIVE_ZOOM, maxZoom: 12, updateWhenIdle: true, keepBuffer: 1, crossOrigin: true });
+      l.on("tileload", () => { loads[i]++; status(); }); l.on("tileerror", () => { errs[i]++; status(); });
+      layers.push(l);
+    });
+    const slider = $("tmSlider"); slider.max = FRAMES - 1; slider.value = idx;
+    function status() {
+      const bad = errs.reduce((a, b) => a + b, 0), ok = loads.reduce((a, b) => a + b, 0);
+      $("tmStatus").textContent = !$("tmSat").checked ? "Satellite loop is off." : ok === 0 && bad > 0 ? "Satellite imagery could not be loaded (" + bad + " tile errors). It may be temporarily unavailable; use PAGASA and other official sources." : bad ? bad + " tile(s) failed to load; some frames may be incomplete." : ok ? "Loaded " + ok + " tiles across " + FRAMES + " frames." : "Loading satellite frames…";
+    }
+    function show(i) {
+      idx = i; slider.value = i;
+      layers.forEach((l, k) => l.setOpacity(k === i ? 0.8 : 0));
+      $("tmFrameTime").textContent = phTime(times[i]);
+    }
+    function setSat(on) { layers.forEach((l) => on ? l.addTo(map) : map.removeLayer(l)); if (on) show(idx); else { stop(); $("tmFrameTime").textContent = "Satellite loop off"; } status(); }
+    function play() { if (timer) return stop(); $("tmPlay").innerHTML = '<i class="bi bi-pause-fill"></i> Pause'; timer = setInterval(() => show((idx + 1) % FRAMES), 700); }
+    function stop() { if (timer) clearInterval(timer); timer = null; $("tmPlay").innerHTML = '<i class="bi bi-play-fill"></i> Play'; }
+    $("tmPlay").addEventListener("click", () => { if ($("tmSat").checked) play(); });
+    slider.addEventListener("input", () => { stop(); show(Number(slider.value)); });
+    $("tmSat").addEventListener("change", (e) => setSat(e.target.checked));
+    setSat(true);
+    map.on("zoomend moveend", () => { layers.forEach((l, k) => { if (k !== idx && map.hasLayer(l)) l.setOpacity(0); }); });
+    window.addEventListener("pagehide", stop);
+    setTimeout(() => map.invalidateSize(), 200);
+
+    // --- official bulletin (admin-entered from PAGASA); shown only while unexpired
+    const esc = (v) => String(v == null ? "" : v).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+    const fmtPH = (t) => new Date(t).toLocaleString("en-PH", { timeZone: "Asia/Manila", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: false }) + " PHT";
+    let stormMarker = null, shownId = null;
+    const isAdminUser = RainAuth.isAdmin(user);
+    async function loadBulletin() {
+      const body = $("tbBody"); if (stormMarker) { map.removeLayer(stormMarker); stormMarker = null; }
+      shownId = null; $("tbDelete").classList.add("d-none");
+      const { data, error } = await sb.from("typhoon_bulletins").select("*").gt("expires_at", new Date().toISOString()).order("issued_at", { ascending: false }).limit(1);
+      if (error) { console.warn("bulletin", error); body.textContent = "Could not load the bulletin (the typhoon_bulletins table may not be set up yet). Check PAGASA directly."; return; }
+      if (!data.length) { body.innerHTML = "No current bulletin has been entered. <b>This does not mean there is no storm</b> &mdash; check <a href=\"https://www.pagasa.dost.gov.ph/tropical-cyclone/severe-weather-bulletin\" target=\"_blank\" rel=\"noopener\">PAGASA</a>."; return; }
+      const b = data[0]; shownId = b.id; if (isAdminUser) $("tbDelete").classList.remove("d-none");
+      const ageH = (Date.now() - new Date(b.issued_at).getTime()) / 3600000;
+      const row = (k, v) => v ? `<div><span class="text-muted">${k}:</span> <b>${esc(v)}</b></div>` : "";
+      const safeUrl = /^https:\/\//.test(b.source_url) ? b.source_url : null;
+      body.innerHTML = (ageH > 6 ? `<div class="mb-2" style="color:#b45309;font-weight:600;">Stale warning: this bulletin was issued ${ageH.toFixed(0)} hours ago. PAGASA normally issues newer ones; check for updates.</div>` : "") +
+        `<div style="font-size:1rem;font-weight:700;">${esc(b.storm_name)}${b.local_name ? " (" + esc(b.local_name) + ")" : ""}${b.bulletin_no ? " &middot; Bulletin " + esc(b.bulletin_no) : ""}</div>` +
+        row("Issued", fmtPH(b.issued_at)) + row("Intensity", b.intensity) + row("Max winds", b.max_wind_kph != null ? b.max_wind_kph + " km/h" : "") + row("Movement", b.movement) +
+        (b.lat != null ? row("Center (as reported)", Number(b.lat).toFixed(2) + ", " + Number(b.lng).toFixed(2)) : "") + row("Wind-signal areas", b.signal_areas) +
+        (b.summary ? `<p class="mt-2 mb-1">${esc(b.summary)}</p>` : "") +
+        `<div class="mt-1" style="font-size:.78rem;">Shown until ${esc(fmtPH(b.expires_at))} &middot; ` + (safeUrl ? `<a href="${esc(safeUrl)}" target="_blank" rel="noopener noreferrer">Open the PAGASA bulletin</a>` : "no valid source link") + `</div>`;
+      if (b.lat != null && b.lng != null) {
+        stormMarker = L.circleMarker([b.lat, b.lng], { radius: 9, color: "#dc2626", weight: 3, fillColor: "#fecaca", fillOpacity: 0.8 }).addTo(map)
+          .bindPopup(`<b>${esc(b.storm_name)}</b><br>Center as reported in PAGASA bulletin issued ${esc(fmtPH(b.issued_at))}<br><small>Position is a past report, not live tracking.</small>`);
+      }
+    }
+    if (isAdminUser) {
+      $("tbAdmin").classList.remove("d-none");
+      $("tbForm").addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const v = (id) => $(id).value.trim(), num = (id) => (v(id) === "" ? null : Number(v(id)));
+        const issued = new Date($("tbIssued").value), exp = new Date($("tbExpires").value);
+        if (isNaN(issued) || isNaN(exp) || exp <= issued) { $("tbMsg").textContent = "\"Show until\" must be after the issue time."; return; }
+        if (!/^https:\/\//.test(v("tbUrl"))) { $("tbMsg").textContent = "Link must start with https://"; return; }
+        const lat = num("tbLat"), lng = num("tbLng");
+        if ((lat === null) !== (lng === null)) { $("tbMsg").textContent = "Enter both latitude and longitude, or neither."; return; }
+        const { data: au } = await sb.auth.getUser();
+        const row = { created_by: au && au.user ? au.user.id : null, storm_name: v("tbName"), bulletin_no: v("tbNo") || null, issued_at: issued.toISOString(), expires_at: exp.toISOString(),
+          lat, lng, intensity: v("tbInt") || null, max_wind_kph: num("tbWind"), movement: v("tbMove") || null, signal_areas: v("tbSig") || null, summary: v("tbSum") || null, source_url: v("tbUrl") };
+        const wantAlert = $("tbAlertOn").checked, alertArea = v("tbAlertArea");
+        if (wantAlert && !alertArea) { $("tbMsg").textContent = "Enter the alert area, or untick the alert option."; return; }
+        const { error } = await sb.from("typhoon_bulletins").insert(row);
+        if (error) { console.error(error); $("tbMsg").textContent = "Could not save: " + error.message; return; }
+        let alertNote = "";
+        if (wantAlert) {
+          const msg = (row.storm_name + " \u2014 PAGASA bulletin" + (row.bulletin_no ? " " + row.bulletin_no : "") + " issued " + fmtPH(row.issued_at) + ". " + (row.summary || "") + " Source: " + row.source_url).slice(0, 1000);
+          const { error: aerr } = await sb.from("alerts").insert({ created_by: row.created_by, title: ("Tropical cyclone: " + row.storm_name).slice(0, 120), type: "Typhoon", severity: $("tbAlertSev").value, area: alertArea,
+            message: msg, lat: row.lat, lng: row.lng, starts_at: new Date().toISOString(), expires_at: row.expires_at });
+          alertNote = aerr ? " Bulletin saved, but the Alert failed: " + aerr.message : " Alert posted.";
+          if (aerr) console.error(aerr);
+        }
+        $("tbMsg").textContent = "Published." + alertNote; e.target.reset(); $("tbAlertBox").classList.add("d-none"); loadBulletin();
+      });
+      $("tbAlertOn").addEventListener("change", (e) => $("tbAlertBox").classList.toggle("d-none", !e.target.checked));
+      $("tbDelete").addEventListener("click", async () => {
+        if (!shownId || !confirm("Delete the bulletin currently shown?")) return;
+        const { error } = await sb.from("typhoon_bulletins").delete().eq("id", shownId);
+        if (error) { rainToast("Could not delete", "bi-exclamation-triangle"); return; }
+        loadBulletin();
+      });
+    }
+    loadBulletin();
+  }
+  if (user) init();
+</script>
+</body>
+</html>

@@ -50,10 +50,10 @@ or opinions on unrelated topics.`;
 
 LIVE DATA
 You can call tools that read this app's live data: current weather and
-forecast, recent earthquakes, Taal Volcano status, active RAIN alerts,
+forecast, air quality, recent earthquakes, Taal Volcano status, active RAIN alerts,
 verified incident reports, evacuation centers and emergency contacts.
 - When the person asks about current or recent conditions ("is it raining?",
-  "any earthquake today?", "are there alerts?", "nearest shelter"), call the
+  "any earthquake today?", "how is the air here?", "are there alerts?", "nearest shelter"), call the
   relevant tool(s) FIRST. Never guess or invent readings, magnitudes, alert
   levels, places or phone numbers.
 - If a question spans topics (e.g. a typhoon check), call several tools at

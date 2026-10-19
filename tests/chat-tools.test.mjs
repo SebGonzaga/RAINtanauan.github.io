@@ -451,3 +451,22 @@ test('handler: per-IP rate limit', async () => {
   assert.deepEqual(codes, [200, 200, 200, 429, 429]);
   assert.equal((await call({ message: 'hi' }, { ip: '203.0.113.10' })).code, 200, 'other IPs unaffected');
 });
+
+const airFixture = { list: [{ dt: Math.floor(NOW / 1000) - 900, main: { aqi: 3 }, components: { co: 210.3, no2: 30.123, o3: 60, so2: 10, pm2_5: 20.456, pm10: 30 } }] };
+test('get_air_quality: category, WHO exceedances computed in code, default-location flag, no API key leaked', async () => {
+  on('/data/2.5/air_pollution', () => json(airFixture));
+  const { ok, result } = await executeTool('get_air_quality', {}, ctx());
+  assert.equal(ok, true);
+  assert.equal(result.openWeatherCategory, 'Moderate');
+  assert.deepEqual(result.aboveWhoDailyGuideline, ['PM2.5', 'NO2']);
+  assert.equal(result.pollutantsMicrogramsPerM3.pm2_5, 20.46);
+  assert.equal(result.assumedDefault, true);
+  assert.equal(result.observedAgo, '15 minutes ago');
+  assert.ok(!JSON.stringify(result).includes('test-owm-key'));
+});
+test('get_air_quality: uses the person\'s coordinates when provided and reports missing data honestly', async () => {
+  on('/data/2.5/air_pollution', () => json({ list: [] }));
+  const r = await executeTool('get_air_quality', {}, ctx({ lat: 14.2, lng: 121.0 }));
+  assert.equal(r.ok, false);
+  assert.ok(calls[0].url.includes('lat=14.2') && calls[0].url.includes('lon=121'));
+});

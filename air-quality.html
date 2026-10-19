@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script>(function(){try{var t=localStorage.getItem("rain_theme")||"dark";document.documentElement.setAttribute("data-theme",t);}catch(e){}})();</script>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Air Quality — RAIN</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="stylesheet" href="assets/css/style.css">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0a1830">
+<link rel="apple-touch-icon" href="assets/icons/icon-192.png">
+</head>
+<body>
+<div id="app-shell-root"></div>
+
+<template id="aq-content">
+  <div class="mb-4"><span class="eyebrow">Air quality</span>
+    <h1 style="font-family:var(--font-display);font-weight:700;font-size:1.4rem;color:var(--canvas-heading);margin:.25rem 0 0;">Air Quality — <span id="aqPlace">Tanauan City</span> area</h1>
+    <button id="aqLocBtn" class="btn-rain btn-rain-ghost btn-rain-sm mt-2" type="button" title="Uses your device location once, rounded to about 100 m; nothing is saved"><i class="bi bi-geo-alt"></i> <span>Use my location</span></button></div>
+  <div id="aqError" class="error-state d-none"><div><strong>Unable to retrieve air-quality data.</strong><div class="text-muted mt-1" style="font-size:.85rem;">The provider may be unreachable or the server key is not set. No values are shown rather than guessed ones.</div></div>
+    <button class="btn-rain btn-rain-ghost btn-rain-sm mt-3" id="aqRetry">Retry</button></div>
+  <div id="aqLoading" class="rain-card"><span class="skeleton d-block" style="height:140px;"></span></div>
+  <div id="aqBody" class="d-none">
+    <div id="aqStale" class="rain-card mb-3 d-none" style="border-left:4px solid #b45309;font-size:.85rem;"></div>
+    <div class="rain-card mb-4">
+      <div class="card-eyebrow"><span>Current reading (grid cell at the queried point)</span><span class="demo-data-tag" style="background:#b45309">MODELED / SATELLITE-BASED, NOT A GROUND STATION</span></div>
+      <div style="font-size:1.6rem;font-weight:700;" id="aqIdx">—</div>
+      <div class="mt-1" style="font-size:.85rem;">Observation time <b id="aqTime">—</b> · Coordinates queried <b id="aqLoc">—</b></div>
+      <div class="table-responsive mt-3"><table class="table table-sm" style="font-size:.85rem;">
+        <thead><tr><th>Pollutant</th><th>Value (µg/m³)</th><th>WHO 2021 24-h guideline</th></tr></thead>
+        <tbody id="aqRows"></tbody></table></div>
+      <div class="text-muted" style="font-size:.75rem;">Guideline column is a reference only: a single reading is not a 24-hour average, so exceeding it here does not mean the guideline is breached.</div>
+    </div>
+    <div class="rain-card mb-4">
+      <div class="card-eyebrow"><span>PM2.5 — last 48 hours</span><span class="demo-data-tag" style="background:#475569">HISTORICAL (SAME SOURCE)</span></div>
+      <div id="aqChart" style="overflow-x:auto;"></div>
+      <div id="aqChartNote" class="text-muted" style="font-size:.78rem;"></div>
+    </div>
+    <div class="rain-card mb-4">
+      <div class="card-eyebrow"><span>Next 24 hours — PM2.5 and index</span><span class="demo-data-tag" style="background:#b45309">FORECAST</span></div>
+      <div id="aqFc" style="font-size:.85rem;"></div>
+    </div>
+    <div class="rain-card mb-4" style="font-size:.85rem;">
+      <b>General precautions</b> (summarized from WHO and DOH public guidance — not a medical diagnosis):
+      <ul class="mb-0 mt-2">
+        <li>When the index is Poor or Very Poor, limit strenuous outdoor activity, especially children, older adults, pregnant people and people with asthma or heart/lung disease.</li>
+        <li>Close windows during heavy smoke or ashfall; a well-fitting N95/KN95 mask reduces fine-particle exposure when outdoors.</li>
+        <li>Seek medical care for persistent coughing, wheezing, chest pain or difficulty breathing.</li>
+        <li>Near Taal Volcano, follow PHIVOLCS and the LGU for volcanic-gas (SO<sub>2</sub>) and ashfall advisories.</li>
+      </ul>
+    </div>
+    <div class="rain-card" style="font-size:.8rem;">
+      <b>Source &amp; limitations.</b> Data: OpenWeatherMap Air Pollution API (atmospheric-composition model blended with satellite and other inputs), requested through this app's server.
+      Values describe a grid cell, not a ground monitor in Tanauan, and may differ from DENR-EMB station readings. The "index" is OpenWeatherMap's own 1–5 scale
+      (Good, Fair, Moderate, Poor, Very Poor), <b>not</b> the Philippine or US AQI. SO<sub>2</sub> and NO<sub>2</sub> here are surface concentrations from the model, not satellite
+      column amounts and not direct Taal gas-flux measurements. No official DENR-EMB feed is integrated because no verified public API was found.
+      Official air-quality information: <a href="https://air.emb.gov.ph" target="_blank" rel="noopener">air.emb.gov.ph</a>.
+    </div>
+  </div>
+</template>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/animejs@4.5.0/lib/anime.iife.min.js"></script>
+<script src="assets/js/animations.js"></script>
+<script src="assets/js/icons.js"></script>
+<script src="assets/js/demo-data.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="assets/js/supabase-client.js"></script>
+<script src="assets/js/rain-auth.js"></script>
+<script src="assets/js/offline-store.js"></script>
+<script src="assets/js/main.js"></script>
+<script type="module">
+  await RainAuth.init();
+  const user = renderAppShell("air-quality.html", { title: "Air Quality" });
+  const HOME = [14.0863, 121.1497]; // approximate Tanauan City center (data lookup point only, not a facility)
+  let LAT = HOME[0], LNG = HOME[1];
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const IDX = { 1: "Good", 2: "Fair", 3: "Moderate", 4: "Poor", 5: "Very Poor" };
+  const POLL = [["pm2_5", "PM2.5", "15"], ["pm10", "PM10", "45"], ["no2", "NO\u2082", "25"], ["so2", "SO\u2082", "40"], ["o3", "O\u2083", "100 (8-h peak season)"], ["co", "CO", "4000 (24-h)"]];
+  const fmtT = (u) => new Date(u * 1000).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+  const get = (q) => fetch("/api/weather?lat=" + LAT + "&lng=" + LNG + "&" + q).then((r) => { if (!r.ok) throw new Error(r.status); return r.json(); });
+  const valid = (d) => d && Array.isArray(d.list);
+
+  function chart(points) {
+    if (!points.length) return "<div class='text-muted'>No history returned.</div>";
+    const W = 640, H = 160, p = 28, vs = points.map((x) => x.v), max = Math.max(...vs, 15), t0 = points[0].t, t1 = points[points.length - 1].t || t0 + 1;
+    const X = (t) => p + (W - 2 * p) * (t - t0) / Math.max(t1 - t0, 1), Y = (v) => H - p - (H - 2 * p) * v / max;
+    const d = points.map((x, i) => (i ? "L" : "M") + X(x.t).toFixed(1) + " " + Y(x.v).toFixed(1)).join(" ");
+    return `<svg viewBox="0 0 ${W} ${H}" style="min-width:420px;width:100%;height:auto" role="img" aria-label="PM2.5 history">
+      <line x1="${p}" y1="${H - p}" x2="${W - p}" y2="${H - p}" stroke="#94a3b8"/><line x1="${p}" y1="${p}" x2="${p}" y2="${H - p}" stroke="#94a3b8"/>
+      <line x1="${p}" y1="${Y(15)}" x2="${W - p}" y2="${Y(15)}" stroke="#b45309" stroke-dasharray="4 3"/><text x="${W - p}" y="${Y(15) - 3}" text-anchor="end" font-size="10" fill="#b45309">WHO 24-h guideline 15</text>
+      <path d="${d}" fill="none" stroke="#2563eb" stroke-width="2"/>
+      <text x="${p}" y="${p - 8}" font-size="10" fill="currentColor">µg/m³ (max ${max.toFixed(0)})</text>
+      <text x="${p}" y="${H - 8}" font-size="10" fill="currentColor">${esc(fmtT(t0))}</text><text x="${W - p}" y="${H - 8}" text-anchor="end" font-size="10" fill="currentColor">${esc(fmtT(t1))}</text></svg>`;
+  }
+
+  async function load() {
+    $("aqError").classList.add("d-none"); $("aqLoading").classList.remove("d-none"); $("aqBody").classList.add("d-none");
+    try {
+      const now = Math.floor(Date.now() / 1000);
+      const [cur, fc, hist] = await Promise.all([get("air=current"), get("air=forecast"), get("air=history&start=" + (now - 48 * 3600) + "&end=" + now).catch(() => null)]);
+      if (!valid(cur) || !cur.list.length || !cur.list[0].components) throw new Error("bad current payload");
+      const c = cur.list[0], comp = c.components;
+      $("aqIdx").textContent = IDX[c.main && c.main.aqi] ? "OpenWeatherMap index " + c.main.aqi + " of 5 — " + IDX[c.main.aqi] : "Index not provided";
+      $("aqTime").textContent = fmtT(c.dt);
+      $("aqLoc").textContent = LAT.toFixed(3) + ", " + LNG.toFixed(3);
+      $("aqRows").innerHTML = POLL.map(([k, label, who]) => {
+        const v = comp[k];
+        return `<tr><td>${label}</td><td>${typeof v === "number" ? v.toFixed(1) : "not available"}</td><td>${who}</td></tr>`;
+      }).join("");
+      const ageH = (now - c.dt) / 3600, st = $("aqStale");
+      if (ageH > 3) { st.classList.remove("d-none"); st.textContent = "Data freshness warning: the latest reading is " + ageH.toFixed(1) + " hours old. Treat it as stale."; } else st.classList.add("d-none");
+      const pts = hist && valid(hist) ? hist.list.filter((x) => x.components && typeof x.components.pm2_5 === "number").map((x) => ({ t: x.dt, v: x.components.pm2_5 })) : [];
+      $("aqChart").innerHTML = hist ? chart(pts) : "<div class='text-muted'>History unavailable from the provider right now.</div>";
+      $("aqChartNote").textContent = pts.length ? pts.length + " hourly points; gaps are not interpolated." : "";
+      const f = valid(fc) ? fc.list.filter((x) => x.dt >= now).slice(0, 24).filter((_, i) => i % 3 === 0) : [];
+      $("aqFc").innerHTML = f.map((x) => `<div class="d-flex justify-content-between border-bottom py-1"><span>${esc(fmtT(x.dt))}</span><span>PM2.5 ${typeof x.components.pm2_5 === "number" ? x.components.pm2_5.toFixed(1) : "n/a"} µg/m³ · ${esc(IDX[x.main.aqi] || "n/a")}</span></div>`).join("") || "No forecast data.";
+      $("aqLoading").classList.add("d-none"); $("aqBody").classList.remove("d-none");
+    } catch (e) { console.warn("air quality", e); $("aqLoading").classList.add("d-none"); $("aqError").classList.remove("d-none"); }
+  }
+  if (user) { $("app-content").appendChild($("aq-content").content.cloneNode(true)); $("aqRetry").addEventListener("click", load); load();
+    $("aqLocBtn").addEventListener("click", () => {
+      const lab = $("aqLocBtn").querySelector("span");
+      if (LAT !== HOME[0] || LNG !== HOME[1]) { LAT = HOME[0]; LNG = HOME[1]; lab.textContent = "Use my location"; $("aqPlace").textContent = "Tanauan City"; load(); return; }
+      if (!navigator.geolocation) { lab.textContent = "Location not supported"; return; }
+      navigator.geolocation.getCurrentPosition((p) => {
+        const la = +p.coords.latitude.toFixed(3), lo = +p.coords.longitude.toFixed(3); // rounded to ~100 m, never stored
+        if (!(la >= 4 && la <= 21.5 && lo >= 116 && lo <= 127.5)) { lab.textContent = "Outside the Philippines"; return; }
+        LAT = la; LNG = lo; lab.textContent = "Back to Tanauan City"; $("aqPlace").textContent = "your location (approx.)"; load();
+      }, () => { lab.textContent = "Location blocked"; }, { timeout: 8000 });
+    });
+  }
+</script>
+</body>
+</html>

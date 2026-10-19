@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script>(function(){try{var t=localStorage.getItem("rain_theme")||"dark";document.documentElement.setAttribute("data-theme",t);}catch(e){}})();</script>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Flood &amp; Landslide 3D — RAIN</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="stylesheet" href="assets/css/style.css">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0a1830">
+<link rel="apple-touch-icon" href="assets/icons/icon-192.png">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/maplibre-gl@4.7.1/dist/maplibre-gl.css">
+</head>
+<body>
+<div id="app-shell-root"></div>
+
+<template id="fl3-content">
+  <div class="mb-3 d-flex flex-wrap justify-content-between align-items-end gap-2"><div><span class="eyebrow">Hazard monitoring · 3D</span>
+    <h1 style="font-family:var(--font-display);font-weight:700;font-size:1.4rem;color:var(--canvas-heading);margin:.25rem 0 0;">Flood &amp; Landslide 3D Terrain — Tanauan City</h1></div>
+    <a class="btn-rain btn-rain-ghost btn-rain-sm" href="flood-landslide.html">2D map</a></div>
+  <div class="rain-card mb-3" style="font-size:.85rem;border-left:4px solid #b45309;">
+    <b>How to read this map.</b> Hazard layers show general <i>susceptibility</i>, not live flood depth, forecasts or timing. Terrain is vertically exaggerated for visibility,
+    so slopes look steeper than they are; it is for orientation only, not for engineering or evacuation decisions. Follow official LGU/CDRRMO, PAGASA and PHIVOLCS advisories.
+  </div>
+  <div class="row g-3 mb-4">
+    <div class="col-lg-8"><div class="rain-card p-2"><div id="fl3Map" style="height:560px;min-height:380px;border-radius:8px;"></div></div></div>
+    <div class="col-lg-4"><div class="rain-card" id="fl3Panel" style="font-size:.82rem;"></div></div>
+  </div>
+  <div class="rain-card" style="font-size:.78rem;"><b>Sources &amp; limitations.</b> Terrain: AWS Open Data "Terrain Tiles" (Terrarium encoding; global elevation compiled from sources such as SRTM, so detail is coarse, roughly tens of meters).
+    Hazard overlays: MGB via the Philippine Geoportal/UlAP server (<code>ulap-hazards.georisk.gov.ph</code>), drawn flat on the terrain. Satellite &copy; Esri, Maxar, Earthstar Geographics; street map &copy; OpenStreetMap contributors.
+    3D buildings: OpenFreeMap / OpenMapTiles, data from OpenStreetMap; heights come from OSM tags and are often missing, so many buildings show a default height. Not Project NOAH data: official NOAH flood-depth scenarios have no verified public service yet. Not tested against the live servers from the build environment.</div>
+</template>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/animejs@4.5.0/lib/anime.iife.min.js"></script>
+<script src="assets/js/animations.js"></script>
+<script src="assets/js/icons.js"></script>
+<script src="assets/js/demo-data.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="assets/js/supabase-client.js"></script>
+<script src="assets/js/rain-auth.js"></script>
+<script src="assets/js/offline-store.js"></script>
+<script src="assets/js/main.js"></script>
+<script type="module">
+  await RainAuth.init();
+  const user = renderAppShell("flood-landslide.html", { title: "Flood & Landslide 3D" });
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  $("app-content").appendChild($("fl3-content").content.cloneNode(true));
+  if (!user) throw new Error("not signed in");
+  const BASE = "https://ulap-hazards.georisk.gov.ph/arcgis/rest/services/MGBPublic/";
+  const HAZ = [
+    { id: "flood", label: "Flood susceptibility (MGB, data as of July 2018)", url: BASE + "Flood/MapServer", on: true },
+    { id: "slide", label: "Rain-induced landslide susceptibility (MGB 2012)", url: BASE + "RainInducedLandslide/MapServer", on: false },
+  ];
+  const expUrl = (u) => `${u}/export?bbox={bbox-epsg-3857}&bboxSR=3857&imageSR=3857&size=256,256&format=png32&transparent=true&f=image`;
+  const map = new maplibregl.Map({
+    container: "fl3Map", center: [121.1497, 14.0863], zoom: 11.5, pitch: 60, bearing: 20, maxPitch: 80, // approx. city center, view only
+    style: { version: 8, sources: {
+      sat: { type: "raster", tileSize: 256, maxzoom: 19, tiles: ["https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"], attribution: "Esri, Maxar, Earthstar Geographics" },
+      osm: { type: "raster", tileSize: 256, maxzoom: 19, tiles: ["https://tile.openstreetmap.org/{z}/{x}/{y}.png"], attribution: "&copy; OpenStreetMap contributors" },
+      dem: { type: "raster-dem", encoding: "terrarium", tileSize: 256, maxzoom: 15, tiles: ["https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png"], attribution: "Terrain: AWS Terrain Tiles (SRTM and others)" },
+    }, layers: [
+      { id: "osm", type: "raster", source: "osm", layout: { visibility: "none" } },
+      { id: "sat", type: "raster", source: "sat" },
+      { id: "hill", type: "hillshade", source: "dem", paint: { "hillshade-exaggeration": 0.35 } },
+    ] },
+  });
+  map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), "top-right");
+  map.addControl(new maplibregl.ScaleControl(), "bottom-left");
+
+  const P = $("fl3Panel");
+  P.innerHTML = `<b>Hazard at this pin</b>
+    <input id="q" type="search" class="form-control form-control-sm mt-2" placeholder="Search city/municipality (e.g. Tanauan, Batangas), Enter" aria-label="Search place">
+    <div class="text-muted" style="font-size:.74rem;">Drag the pin or click the map to move it. Search finds cities/towns, not street addresses.</div>
+    <div id="hzRes" class="mt-2">Checking…</div>
+    <hr><b>Controls</b>
+    <label class="d-block mt-2"><input type="checkbox" id="b3" checked> 3D buildings (zoom in)</label>
+    <label class="d-block mt-2"><input type="checkbox" id="t3" checked> 3D terrain</label>
+    <label class="d-block">Vertical exaggeration <span id="exv">1.5</span>× <input type="range" id="ex" min="1" max="3" step="0.5" value="1.5" class="form-range"></label>
+    <label class="d-block">Basemap <select id="bm" class="form-select form-select-sm"><option value="sat">Satellite</option><option value="osm">Street map</option></select></label>
+    <label class="d-block mt-2">Hazard opacity <input type="range" id="op" min="20" max="100" value="60" class="form-range"></label>
+    <hr><b>Layers</b><div id="fl3L" class="mt-2"></div>`;
+  $("fl3L").innerHTML = HAZ.map((h) => `<div class="mb-3"><label><input type="checkbox" data-k="${h.id}" ${h.on ? "checked" : ""}> <b>${esc(h.label)}</b></label>
+      <div><span class="demo-data-tag" style="background:#b45309">HAZARD SUSCEPTIBILITY</span></div><div id="st-${h.id}" class="text-muted">Waiting for map…</div></div>`).join("") +
+    `<div class="mb-2"><label><input type="checkbox" data-k="reports" checked> <b>Community flood/landslide reports (30 days)</b></label>
+      <div><span class="demo-data-tag" style="background:#b45309">COMMUNITY REPORT · UNVERIFIED UNLESS MARKED</span></div><div id="st-reports" class="text-muted">Loading…</div></div>`;
+  const st = (k, t) => { const e = $("st-" + k); if (e) e.textContent = t; };
+  const cnt = {}; HAZ.forEach((h) => (cnt[h.id] = { ok: 0, bad: 0 }));
+
+  map.on("load", () => {
+    map.setTerrain({ source: "dem", exaggeration: 1.5 });
+    map.addSource("ofm", { type: "vector", url: "https://tiles.openfreemap.org/planet" }); // OpenStreetMap-derived; attribution comes from its TileJSON
+    map.addLayer({ id: "bld3d", type: "fill-extrusion", source: "ofm", "source-layer": "building", minzoom: 14,
+      paint: { "fill-extrusion-color": "#cfc6bb", "fill-extrusion-opacity": 0.85,
+        "fill-extrusion-height": ["coalesce", ["get", "render_height"], 5], "fill-extrusion-base": ["coalesce", ["get", "render_min_height"], 0] } });
+    queryPoint();
+    HAZ.forEach((h) => {
+      map.addSource(h.id, { type: "raster", tileSize: 256, minzoom: 8, tiles: [expUrl(h.url)], attribution: "Hazard data: MGB via Philippine Geoportal/UlAP" });
+      map.addLayer({ id: h.id, type: "raster", source: h.id, paint: { "raster-opacity": 0.6 }, layout: { visibility: h.on ? "visible" : "none" } });
+      st(h.id, h.on ? "Loading…" : "Off");
+    });
+    map.addSource("reports", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
+    map.addLayer({ id: "reports", type: "circle", source: "reports", paint: { "circle-radius": 8, "circle-stroke-color": "#fff", "circle-stroke-width": 2, "circle-pitch-alignment": "map",
+      "circle-color": ["match", ["get", "category"], "Flooding", "#2563eb", "#92400e"] } });
+    map.on("click", "reports", (e) => { const p = e.features[0].properties;
+      new maplibregl.Popup().setLngLat(e.lngLat).setHTML(`<b>${esc(p.category)}</b> · ${p.status === "pending" ? "Unverified report" : "Reviewed by admin"}<br>${esc(p.area)}<br><small>${esc(p.when)}</small><br>${esc(p.description)}`).addTo(map); });
+    loadReports();
+  });
+  const marker = new maplibregl.Marker({ draggable: true, color: "#dc2626" }).setLngLat([121.1497, 14.0863]).addTo(map); // start = approx. city center
+  marker.on("dragend", () => queryPoint());
+  map.on("click", (e) => { if (map.getLayer("reports") && map.queryRenderedFeatures(e.point, { layers: ["reports"] }).length) return; marker.setLngLat(e.lngLat); queryPoint(); });
+  let qTok = 0;
+  const SVC = [["Flood", "Flood susceptibility (MGB 2018)"], ["RainInducedLandslide", "Landslide susceptibility (MGB 2012)"]];
+  async function queryPoint() {
+    const tok = ++qTok, { lng, lat } = marker.getLngLat();
+    $("hzRes").textContent = "Checking…";
+    const parts = await Promise.all(SVC.map(async ([svc, label]) => {
+      try {
+        const r = await fetch(`/api/hazard-point?service=${svc}&lat=${lat}&lng=${lng}`);
+        if (!r.ok) throw new Error(r.status);
+        const j = await r.json();
+        if (!j.count) return `<div class="mb-2"><b>${esc(label)}</b><br>No mapped class returned at this point. That can mean low/no susceptibility <i>or</i> no coverage; the source does not say which.</div>`;
+        const kv = Object.entries(j.attributes || {}), head = kv.find(([k]) => /susc|class|hazard|level|rating/i.test(k));
+        return `<div class="mb-2"><b>${esc(label)}</b><br>${head ? "<span style='font-size:1rem;font-weight:700'>" + esc(head[1]) + "</span><br>" : ""}<small class="text-muted">As returned by MGB: ${kv.map(([k, v]) => esc(k) + " = " + esc(v)).join("; ") || "(no attributes)"}</small></div>`;
+      } catch (e) { return `<div class="mb-2"><b>${esc(label)}</b><br>Could not be checked right now.</div>`; }
+    }));
+    if (tok !== qTok) return; // a newer pin position superseded this one
+    $("hzRes").innerHTML = parts.join("") + `<div class="mb-1"><b>Storm surge</b><br>No data source integrated yet.</div><small class="text-muted">Point lookup of general susceptibility, not current conditions. ${lat.toFixed(5)}, ${lng.toFixed(5)}</small>`;
+  }
+  $("q").addEventListener("keydown", async (e) => {
+    if (e.key !== "Enter") return;
+    const q = e.target.value.trim(); if (!q) return;
+    try {
+      const r = await fetch("/api/weather?geocode=" + encodeURIComponent(q.includes(",") ? q : q + ",PH"));
+      const j = r.ok ? await r.json() : [];
+      const hit = j.find((x) => x.country === "PH") || j[0];
+      if (!hit) { $("hzRes").textContent = "No place found. Try \"Town, Province\"."; return; }
+      marker.setLngLat([hit.lon, hit.lat]); map.flyTo({ center: [hit.lon, hit.lat], zoom: 14 }); queryPoint();
+    } catch (err) { $("hzRes").textContent = "Search failed. Try again."; }
+  });
+  map.on("sourcedata", (e) => { if (cnt[e.sourceId] && e.tile) { cnt[e.sourceId].ok++; upd(e.sourceId); } });
+  map.on("error", (e) => { const id = e.sourceId; if (cnt[id]) { cnt[id].bad++; upd(id); } else console.warn("map error", e.error); });
+  function upd(id) { const c = cnt[id]; st(id, c.ok ? "Loaded (tiles: " + c.ok + (c.bad ? ", failed: " + c.bad : "") + ")" : c.bad > 3 ? "Failed to load from the source server" : "Loading…"); }
+
+  async function loadReports() {
+    try {
+      const since = new Date(Date.now() - 30 * 864e5).toISOString();
+      const { data, error } = await sb.from("incidents").select("category,area,description,status,created_at,lat,lng")
+        .in("category", ["Flooding", "Landslide"]).neq("status", "dismissed").gte("created_at", since).not("lat", "is", null).not("lng", "is", null).limit(500);
+      if (error) throw error;
+      const feats = (data || []).filter((r) => r.lat >= 4 && r.lat <= 21.5 && r.lng >= 116 && r.lng <= 127.5).map((r) => ({ type: "Feature", geometry: { type: "Point", coordinates: [r.lng, r.lat] },
+        properties: { category: r.category, area: r.area, status: r.status, when: new Date(r.created_at).toLocaleString(), description: (r.description || "").slice(0, 200) } }));
+      map.getSource("reports").setData({ type: "FeatureCollection", features: feats });
+      st("reports", feats.length ? feats.length + " report(s) shown (blue = flooding, brown = landslide)" : "No reports with coordinates in the last 30 days");
+    } catch (e) { console.warn("reports", e); st("reports", "Could not load reports"); }
+  }
+
+  P.addEventListener("change", (e) => {
+    const t = e.target, k = t.dataset && t.dataset.k;
+    if (k) { map.setLayoutProperty(k, "visibility", t.checked ? "visible" : "none"); if (k !== "reports") st(k, t.checked ? "Loading…" : "Off"); }
+    if (t.id === "b3") map.setLayoutProperty("bld3d", "visibility", t.checked ? "visible" : "none");
+    if (t.id === "t3") { map.setTerrain(t.checked ? { source: "dem", exaggeration: +$("ex").value } : null); if (!t.checked) map.easeTo({ pitch: 0 }); }
+    if (t.id === "bm") { map.setLayoutProperty("sat", "visibility", t.value === "sat" ? "visible" : "none"); map.setLayoutProperty("osm", "visibility", t.value === "osm" ? "visible" : "none"); }
+  });
+  P.addEventListener("input", (e) => {
+    if (e.target.id === "ex") { $("exv").textContent = e.target.value; if ($("t3").checked) map.setTerrain({ source: "dem", exaggeration: +e.target.value }); }
+    if (e.target.id === "op") HAZ.forEach((h) => map.getLayer(h.id) && map.setPaintProperty(h.id, "raster-opacity", e.target.value / 100));
+  });
+</script>
+</body>
+</html>

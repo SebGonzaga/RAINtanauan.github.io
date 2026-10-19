@@ -47,6 +47,10 @@
             <input type="file" class="form-control form-control-rain" id="incidentPhoto" accept="image/*">
           </div>
           <div class="mb-3">
+            <label class="form-label-rain">Barangay (optional)</label>
+            <select class="form-select form-control-rain" id="incidentBarangay"><option value="">Not sure / not listed</option></select>
+          </div>
+          <div class="mb-3">
             <label class="form-label-rain">Location</label>
             <div class="d-flex gap-2">
               <input type="text" class="form-control form-control-rain" id="incidentLocation" placeholder="Detecting location..." readonly>
@@ -108,6 +112,12 @@
       "Please describe what you observed (at least 10 characters)."
     );
 
+    // Barangay list: data/tanauan-barangay-list.csv (PSA/NAMRIA via OCHA COD-AB, 48 barangays). If it can't load, the field stays optional and empty.
+    fetch("data/tanauan-barangay-list.csv").then((r) => { if (!r.ok) throw new Error(r.status); return r.text(); }).then((t) => {
+      const sel = document.getElementById("incidentBarangay");
+      t.split(/\r?\n/).slice(1).forEach((line) => { const m = line.match(/^([^,]+),/); if (m && m[1].trim()) { const o = document.createElement("option"); o.value = o.textContent = m[1].trim(); sel.appendChild(o); } });
+    }).catch((e) => console.warn("barangay list", e));
+
     document.getElementById("reportForm").addEventListener("submit", async (e) => {
       e.preventDefault();
       const btn = document.getElementById("submitReportBtn");
@@ -144,15 +154,22 @@
         }
       }
 
-      const { error } = await sb.from("incidents").insert({
+      const payload = {
         reporter_id: user.id,
         title: `${type || "Incident"} reported`,
         description: document.getElementById("incidentDesc").value.trim(),
         category: type,
         area: locationText,
+        barangay: document.getElementById("incidentBarangay").value || null,
         lat, lng,
         photo_url: photoUrl,
-      });
+      };
+      let { error } = await sb.from("incidents").insert(payload);
+      // Safety net: if supabase/008 hasn't been run yet, the barangay column doesn't exist. Don't block the resident's report.
+      if (error && /barangay/i.test(error.message || "")) {
+        delete payload.barangay;
+        ({ error } = await sb.from("incidents").insert(payload));
+      }
 
       btn.disabled = false;
       btn.innerHTML = `<i class="bi bi-flag dicon" data-dicon="flag"></i> Submit Report`;

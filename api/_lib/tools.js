@@ -80,6 +80,15 @@ async function resolveLocation(ctx, place) {
 const r2 = (n) => Math.round(n * 100) / 100;
 const owmKeyFor = (lat, lng) => `${lat.toFixed(2)},${lng.toFixed(2)}`;
 
+// OpenWeather's own 1-5 air index (NOT the US AQI) and WHO 2021 24-hour guideline values (ug/m3).
+const AIR_BANDS = ['Good', 'Fair', 'Moderate', 'Poor', 'Very Poor'];
+const WHO_24H = { pm2_5: 15, pm10: 45, no2: 25, so2: 40 };
+function owmAir(lat, lng, signal) {
+  const key = owmKey();
+  return cached(`owm:air:${owmKeyFor(lat, lng)}`, 30 * MIN, () =>
+    fetchJson(`${OWM}/data/2.5/air_pollution?lat=${lat}&lon=${lng}&appid=${key}`, { signal }));
+}
+
 function owmCurrent(lat, lng, signal) {
   const key = owmKey();
   return cached(`owm:cur:${owmKeyFor(lat, lng)}`, 10 * MIN, () =>
@@ -157,6 +166,40 @@ export const TOOLS = {
         observedAt: new Date(observedMs).toISOString(),
         observedAgo: ago(observedMs),
         source: 'OpenWeather',
+      };
+    },
+  },
+
+  get_air_quality: {
+    meta: { label: 'Air quality', source: 'OpenWeather Air Pollution' },
+    declaration: {
+      name: 'get_air_quality',
+      description: 'Air quality right now at a location: pollutant levels (PM2.5, PM10, NO2, SO2, O3, CO in ug/m3), OpenWeather\'s 1-5 air index, and which pollutants exceed WHO 24-hour guideline values. Use for "how is the air here?", "is it safe to jog?", smog or ashfall-haze questions.',
+      parameters: obj({ place: { type: 'string', description: 'Optional Philippine city/municipality. Omit to use the person\'s own location or saved area.' } }),
+    },
+    async run(args, ctx) {
+      const loc = await resolveLocation(ctx, args.place);
+      if (loc.error) return { ok: false, error: loc.error };
+      const d = await owmAir(loc.lat, loc.lng, ctx.signal);
+      const e = d?.list?.[0];
+      if (!e || !e.components) return { ok: false, error: 'No air-quality reading was returned for this location right now.' };
+      const pick = (k) => (typeof e.components[k] === 'number' ? r2(e.components[k]) : null);
+      const pollutants = { pm2_5: pick('pm2_5'), pm10: pick('pm10'), no2: pick('no2'), so2: pick('so2'), o3: pick('o3'), co: pick('co') };
+      const above = Object.entries(WHO_24H).filter(([k, v]) => pollutants[k] != null && pollutants[k] > v).map(([k]) => k.replace('_', '.').toUpperCase());
+      const observedMs = (e.dt || Date.now() / 1000) * 1000;
+      return {
+        ok: true,
+        location: loc.label,
+        ...(loc.assumedDefault && { assumedDefault: true }),
+        openWeatherIndex: e.main?.aqi ?? null,
+        openWeatherCategory: AIR_BANDS[(e.main?.aqi || 0) - 1] ?? null,
+        pollutantsMicrogramsPerM3: pollutants,
+        aboveWhoDailyGuideline: above,
+        whoGuidelineNote: 'WHO 2021 24-hour guideline values: PM2.5 15, PM10 45, NO2 25, SO2 40 ug/m3. This is one modeled hourly reading, so the comparison is only a rough guide.',
+        observedAt: new Date(observedMs).toISOString(),
+        observedAgo: ago(observedMs),
+        source: 'OpenWeather Air Pollution',
+        limitations: 'A modeled estimate for the area, not a ground-station measurement at the exact spot. Volcanic gas near Taal is not separately monitored here; for volcanic hazards follow PHIVOLCS.',
       };
     },
   },

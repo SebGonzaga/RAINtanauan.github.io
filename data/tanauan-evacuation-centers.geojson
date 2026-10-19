@@ -1,0 +1,1 @@
+{"type":"FeatureCollection","_meta":{"dataset":"Evacuation centers","status":"EMPTY - run scripts/build-tanauan-data.mjs, ideally with a CDRRMO CSV","crs":"WGS84 (EPSG:4326), [lng, lat]"},"features":[]}

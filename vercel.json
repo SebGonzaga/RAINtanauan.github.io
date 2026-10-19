@@ -3,6 +3,9 @@
     "api/chat.js": {
       "maxDuration": 30,
       "includeFiles": "assets/js/demo-data.js"
+    },
+    "api/daily-digest.js": {
+      "maxDuration": 30
     }
   },
   "headers": [
@@ -14,6 +17,12 @@
           "value": "no-cache, no-store, must-revalidate"
         }
       ]
+    }
+  ],
+  "crons": [
+    {
+      "path": "/api/daily-digest",
+      "schedule": "0 16 * * *"
     }
   ]
 }
