@@ -22,7 +22,7 @@
 
   --ink-900:#0a1830;
   --ink-600:#4a5a72;
-  --ink-400:#8291a6;
+  --ink-400:#52627a;   /* was #8291a6 (2.7:1 on white) — now 6:1 on white, 5:1 on tinted surfaces */
 
   --status-safe:#1f9d7c;
   --status-safe-bg:#e4f7f1;
@@ -49,9 +49,10 @@
      hex in 2-4 places each (hover-darkened states, dark-mode tints, caution
      text-on-tint). Centralizing them means a color only ever needs to change
      in one place. */
-  --accent-cyan-hover:#1f8489;   /* brand-mark gradient stop, hover states */
+  --accent-cyan-hover:#2aa7af;   /* brand-mark gradient stop, hover states (navy text on it = 6.6:1) */
+  --accent-cyan-ink:#0b6e75;     /* cyan used AS TEXT or as a fill under white text on light surfaces (6:1 on white) */
   --danger-hover:#c22e3e;        /* btn-emergency / emergency-trigger hover */
-  --caution-text:#8a6a10;        /* text color on --status-caution-bg tints */
+  --caution-text:#755a0b;        /* text color on --status-caution-bg tints */
   --info-text:#1f4b8f;           /* text color on the "information" alert tint */
   /* ---- .status-badge-only text tones -----------------------------------
      The badge backgrounds are pale gradients; the plain --status-* colors
@@ -91,8 +92,8 @@
   --app-surface-hover:rgba(255,255,255,.075);
   --app-border:rgba(255,255,255,.09);
   --app-text-primary:#f3f6fa;
-  --app-text-secondary:rgba(243,246,250,.68);
-  --app-text-muted:rgba(243,246,250,.45);
+  --app-text-secondary:rgba(243,246,250,.80);
+  --app-text-muted:rgba(243,246,250,.66);
   --brand:var(--accent-cyan);
   --brand-soft:rgba(51,201,209,.16);
   --success:var(--status-safe);
@@ -107,8 +108,8 @@
      are used by .rain-card. Sidebar/topbar/bottom-nav intentionally stay
      on the fixed navy "chrome" in both themes, like most app shells. */
   --canvas-heading:#ffffff;
-  --canvas-body:rgba(255,255,255,.7);
-  --canvas-muted:rgba(255,255,255,.48);
+  --canvas-body:rgba(255,255,255,.82);
+  --canvas-muted:rgba(255,255,255,.68);
   --card-bg:rgba(255,255,255,.92);
   --card-border:rgba(255,255,255,.5);
   --card-shadow:0 1px 2px rgba(6,14,28,.2), 0 20px 44px -20px rgba(6,14,28,.55);
@@ -250,7 +251,7 @@ a{color:inherit; text-decoration:none;}
 .btn-rain-sm{padding:.45rem 1rem; font-size:.85rem;}
 
 .btn-emergency{
-  background:linear-gradient(135deg, #ef5b6b, var(--status-critical) 60%, #b52b3b);
+  background:linear-gradient(135deg, #d8394a, #c42a3b 55%, #b52b3b);
   color:#fff;
   font-weight:700;
   border-radius:var(--radius-md);
@@ -749,7 +750,7 @@ body.rl-loading{ overflow:hidden; }
 .sidebar-nav{padding:1rem .8rem; flex:1; overflow-y:auto;}
 .sidebar-nav .nav-section-label{
   font-family:var(--font-mono); font-size:.65rem; letter-spacing:.1em;
-  text-transform:uppercase; color:rgba(255,255,255,.35);
+  text-transform:uppercase; color:rgba(255,255,255,.62);
   padding:.8rem .7rem .35rem;
 }
 .sidebar-link{
@@ -795,7 +796,7 @@ body.rl-loading{ overflow:hidden; }
   font-size:.8rem; font-weight:700; color:var(--accent-cyan);
 }
 .sidebar-user .name{font-size:.85rem; font-weight:600; color:#fff;}
-.sidebar-user .role{font-size:.7rem; color:rgba(255,255,255,.45); font-family:var(--font-mono);}
+.sidebar-user .role{font-size:.7rem; color:rgba(255,255,255,.7); font-family:var(--font-mono);}
 
 .sidebar-overlay{
   display:none;
@@ -1417,7 +1418,7 @@ body.rl-loading{ overflow:hidden; }
 .live-badge{
   display:inline-flex; align-items:center; gap:.4rem;
   font-family:var(--font-mono); font-size:.65rem; font-weight:700; letter-spacing:.08em;
-  color:var(--success);
+  color:var(--dark-tone-safe);
 }
 .live-badge .dot{width:var(--dot-xs);height:var(--dot-xs);border-radius:50%; background:var(--success);}
 .freshness{
@@ -1649,7 +1650,7 @@ body.rl-loading{ overflow:hidden; }
 .fs-90{font-size:.9rem;}
 .fs-95{font-size:.95rem;}
 .fs-heading-md{font-size:clamp(1.7rem,3vw,2.2rem); font-weight:700;}
-.text-cyan-deep{color:var(--accent-cyan-hover);} /* darker cyan for eyebrows on light surfaces */
+.text-cyan-deep{color:var(--accent-cyan-ink);} /* darker cyan for eyebrows on light surfaces */
 .text-safe{color:var(--status-safe);}
 .text-white-70{color:rgba(255,255,255,.7);}
 .max-w-280{max-width:280px;}
@@ -2305,7 +2306,7 @@ body.rl-loading{ overflow:hidden; }
   box-shadow:0 1px 2px rgba(10,24,48,.05);
   transition:transform .18s ease, border-color .18s ease, background .18s ease, box-shadow .18s ease;
 }
-.va-chip i{color:var(--accent-cyan-hover); font-size:.85rem;}
+.va-chip i{color:var(--accent-cyan-ink); font-size:.85rem;}
 .va-chip:hover{border-color:var(--accent-cyan); background:rgba(51,201,209,.09); transform:translateY(-1px); box-shadow:0 8px 16px -10px rgba(10,24,48,.35);}
 .va-chip:active{transform:scale(.96);}
 
@@ -2322,7 +2323,7 @@ body.rl-loading{ overflow:hidden; }
 }
 .chat-scroll-btn.show{opacity:1; pointer-events:auto; transform:translate(-50%, 0);}
 .chat-scroll-btn:hover{border-color:var(--accent-cyan);}
-.chat-scroll-btn i{color:var(--accent-cyan-hover);}
+.chat-scroll-btn i{color:var(--accent-cyan-ink);}
 
 /* ---- Composer ---- */
 .chat-input-row{background:linear-gradient(180deg, #ffffff, #fbfcfe); box-shadow:0 -10px 24px -22px rgba(10,24,48,.5);}
@@ -2468,14 +2469,14 @@ a.src-chip:active{transform:scale(.96);}
 .hourly-card:hover{transform:translateY(-3px); box-shadow:var(--shadow-card-hover);}
 .hourly-card.is-now{border-color:var(--accent-cyan); box-shadow:0 0 0 1px var(--accent-cyan) inset;}
 .hourly-card .h-time{font-size:.74rem; font-weight:700; letter-spacing:.02em; color:var(--ink-600); white-space:nowrap;}
-.hourly-card.is-now .h-time{color:var(--accent-cyan-hover);}
+.hourly-card.is-now .h-time{color:var(--accent-cyan-ink);}
 .hourly-card .h-icon{font-size:1.6rem; line-height:1; display:flex; align-items:center; justify-content:center; min-height:1.8rem;}
 .hourly-card .h-temp{font-size:1.05rem; font-weight:700; color:var(--navy-950);}
 .hourly-card .h-rain{
   display:inline-flex; align-items:center; gap:.2rem;
   font-size:.7rem; font-weight:700; line-height:1;
   padding:.28rem .5rem; border-radius:999px;
-  background:rgba(51,201,209,.14); color:var(--accent-cyan-hover);
+  background:rgba(51,201,209,.14); color:var(--accent-cyan-ink);
 }
 .hourly-card .h-rain.is-mid{background:var(--status-caution-bg); color:var(--caution-text);}
 .hourly-card .h-rain.is-high{background:var(--status-warning-bg); color:var(--status-warning-text);}
@@ -2569,3 +2570,173 @@ html.page-leaving body:not(:has(#app-shell-root)){
   .rain-skeleton{animation:none;}
   #rain-progress{transition:none;}
 }
+
+
+/* =========================================================================
+   READABILITY + VISUAL POLISH PASS
+   (1) Contrast fixes — every text/background pair below was measured and
+       meets WCAG AA (4.5:1 body text, 3:1 large text).
+   (2) Page identity — each hazard page now carries its own accent colour
+       (the same colour family the alert levels already use), shown in a
+       header band with the radar-ring motif, the card top rule, and
+       the small card markers. Body gets data-page from renderAppShell().
+   ========================================================================= */
+
+/* ---- (1) Contrast ----------------------------------------------------- */
+
+/* Bootstrap's .text-muted (#6c757d) is too faint on navy and on pale grey. */
+.app-content .text-muted{color:var(--canvas-muted) !important;}
+.rain-card:not(.rain-card-dark) .text-muted{color:var(--ink-600) !important;}
+.rain-card.rain-card-dark .text-muted{color:var(--app-text-muted) !important;}
+
+/* Error text: bright red only works on dark; use deeper red on light. */
+.error-state{color:var(--dark-tone-critical);}
+[data-theme="light"] .error-state,
+.rain-card:not(.rain-card-dark) .error-state{color:#b3202f;}
+
+/* Cyan is a fill/accent colour, not a text colour, on light surfaces. */
+[data-theme="light"] .eyebrow{color:var(--accent-cyan-ink);}
+[data-theme="light"] .eyebrow::before{background:var(--accent-cyan-ink); box-shadow:0 0 0 4px rgba(11,110,117,.14);}
+.rain-card:not(.rain-card-dark) a[style*="accent-cyan"],
+.rain-card:not(.rain-card-dark) i[style*="accent-cyan"],
+.auth-form-col a[style*="accent-cyan"],
+.auth-form-col a:not(.btn-rain):not([style]){color:var(--accent-cyan-ink) !important;}
+.auth-form-col a:not(.btn-rain):hover{text-decoration:underline;}
+
+/* Outline buttons are white-on-dark by default; flip them on light surfaces. */
+.auth-form-col .btn-rain-outline,
+.rain-card:not(.rain-card-dark) .btn-rain-outline{
+  color:var(--navy-950); border-color:rgba(10,24,48,.3);
+}
+.auth-form-col .btn-rain-outline:hover,
+.rain-card:not(.rain-card-dark) .btn-rain-outline:hover{
+  background:var(--navy-900); color:#fff; border-color:var(--navy-900);
+}
+
+/* Source/status tags that set their own background inline need light text. */
+.demo-data-tag[style]{color:#fff; background-image:none;}
+.demo-data-tag{padding:.2rem .55rem;}
+
+/* Empty states: readable in a light card AND directly on the canvas. */
+.rain-card:not(.rain-card-dark) .empty-state-inline{color:var(--ink-600);}
+.rain-card:not(.rain-card-dark) .empty-state-inline .glyph{color:var(--accent-cyan-ink);}
+
+/* Live badge on the light theme canvas. */
+[data-theme="light"] .app-content .live-badge{color:#146a53;}
+[data-theme="light"] .app-content .rain-card-dark .live-badge{color:var(--dark-tone-safe);}
+
+/* ---- (2) Page identity ------------------------------------------------ */
+
+body{--page-accent:var(--accent-cyan);}
+body[data-page="weather"]          {--page-accent:#3f8cf3;}
+body[data-page="typhoon-map"]      {--page-accent:#5b7fd8;}
+body[data-page="earthquake"]       {--page-accent:#e8703a;}
+body[data-page="volcano"]          {--page-accent:#d8394a;}
+body[data-page="flood-landslide"]  {--page-accent:#2a9fc4;}
+body[data-page="air-quality"]      {--page-accent:#1f9d7c;}
+body[data-page="heat-index"]       {--page-accent:#e0a92a;}
+body[data-page="mosquito"]         {--page-accent:#9a7ad8;}
+body[data-page="emergency"]        {--page-accent:#d8394a;}
+body[data-page="alerts"],
+body[data-page="admin-alerts"]     {--page-accent:#e0a92a;}
+body[data-page="report"],
+body[data-page="admin-incidents"]  {--page-accent:#e8703a;}
+
+/* Canvas: faint survey grid (the same grid the sign-in side panel uses). */
+.app-main{
+  background-image:
+    linear-gradient(rgba(255,255,255,.028) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,.028) 1px, transparent 1px);
+  background-size:44px 44px;
+}
+[data-theme="light"] .app-main{
+  background-image:
+    linear-gradient(rgba(10,24,48,.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(10,24,48,.035) 1px, transparent 1px);
+}
+
+/* Page header band — any block whose first child is the eyebrow label. */
+.app-content div:has(> .eyebrow){
+  position:relative; isolation:isolate; overflow:hidden;
+  flex:1 1 18rem;
+  padding:1.15rem 1.4rem 1.15rem 1.65rem;
+  margin-bottom:1.5rem;
+  border-radius:var(--radius-md);
+  border:1px solid var(--app-border);
+  background:
+    linear-gradient(100deg, color-mix(in srgb, var(--page-accent) 18%, transparent), transparent 72%),
+    var(--app-surface);
+}
+.app-content div:has(> .eyebrow)::before{            /* accent rail */
+  content:""; position:absolute; left:0; top:0; bottom:0; width:4px; z-index:-1;
+  background:var(--page-accent);
+}
+.app-content div:has(> .eyebrow)::after{             /* radar rings */
+  content:""; position:absolute; right:-70px; top:50%; width:260px; height:260px; z-index:-1;
+  transform:translateY(-50%); pointer-events:none;
+  background:repeating-radial-gradient(circle, transparent 0 24px,
+    color-mix(in srgb, var(--page-accent) 34%, transparent) 24px 25px);
+  -webkit-mask-image:radial-gradient(circle, #000 25%, transparent 70%);
+          mask-image:radial-gradient(circle, #000 25%, transparent 70%);
+}
+[data-theme="light"] .app-content div:has(> .eyebrow){
+  border-color:var(--surface-line);
+  background:
+    linear-gradient(100deg, color-mix(in srgb, var(--page-accent) 13%, transparent), transparent 72%),
+    #fff;
+  box-shadow:var(--card-shadow);
+}
+.app-content div:has(> .eyebrow) > h1{
+  font-size:clamp(1.45rem, 2.4vw, 1.9rem) !important;
+  line-height:1.15; margin-top:.4rem !important;
+}
+/* Eyebrow takes the page colour, pulled toward the heading colour so it stays legible in both themes. */
+.app-content div:has(> .eyebrow) > .eyebrow,
+.app-content .eyebrow{color:color-mix(in srgb, var(--page-accent) 62%, var(--canvas-heading));}
+.app-content .eyebrow::before{background:var(--page-accent); box-shadow:0 0 0 4px color-mix(in srgb, var(--page-accent) 22%, transparent);}
+
+/* Cards pick up the page colour on their top rule and heading marker. */
+.rain-card::before,
+.rain-card.rain-card-dark::before{background:linear-gradient(90deg, var(--page-accent), transparent 85%);}
+.rain-card .card-eyebrow > span:first-child::before{
+  content:""; display:inline-block; width:7px; height:7px; border-radius:2px;
+  background:var(--page-accent); margin-right:.5rem; vertical-align:.05em;
+}
+.rain-card .card-eyebrow > span:first-child{display:inline-flex; align-items:center;}
+
+/* Tables: a header band and quiet row striping make long lists scannable. */
+.table-rain thead th{background:#f3f6fa; border-top:1px solid var(--surface-line);}
+.table-rain thead th:first-child{border-top-left-radius:var(--radius-sm);}
+.table-rain thead th:last-child{border-top-right-radius:var(--radius-sm);}
+.table-rain tbody tr:nth-child(even) td{background:rgba(10,24,48,.022);}
+.table-rain tbody tr:hover td{background:rgba(51,201,209,.09);}
+
+/* Empty states: a dashed placeholder reads as "waiting for data", not as a blank page. */
+.empty-state-inline{
+  border:1.5px dashed color-mix(in srgb, currentColor 28%, transparent);
+  border-radius:var(--radius-md); padding:1.6rem 1rem;
+}
+
+/* Form fields: visible resting border and a clear focus ring. */
+.form-control-rain, .app-content .form-control, .app-content .form-select{
+  border-color:#c3cddb; background-color:#fff;
+}
+.form-control-rain:focus, .app-content .form-control:focus, .app-content .form-select:focus{
+  border-color:var(--accent-cyan-ink);
+  box-shadow:0 0 0 3px color-mix(in srgb, var(--accent-cyan-ink) 22%, transparent);
+}
+
+@media (max-width: 575.98px){
+  .app-content div:has(> .eyebrow){padding:1rem 1.1rem 1rem 1.35rem; margin-bottom:1.1rem;}
+  .app-content div:has(> .eyebrow)::after{right:-110px; opacity:.7;}
+}
+
+/* Header band sitting beside an action button (admin pages): the parent already supplies spacing. */
+.app-content .d-flex > div:has(> .eyebrow){margin-bottom:0;}
+
+/* Muted text on the fixed-navy surfaces (dark cards, map panels) must use the light muted tone. */
+.rain-card-dark, .map-info-panel{--ink-400:rgba(243,246,250,.68); --ink-600:rgba(243,246,250,.8);}
+
+/* Plain <label>s: readable on the canvas in either theme, and on cards. */
+.app-content label{color:var(--canvas-body);}
+.rain-card:not(.rain-card-dark) label{color:var(--ink-900);}

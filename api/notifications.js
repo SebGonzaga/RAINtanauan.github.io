@@ -70,7 +70,9 @@ export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
-  if (req.headers['x-webhook-secret'] !== process.env.EMAIL_WEBHOOK_SECRET) {
+  // Fail closed: if EMAIL_WEBHOOK_SECRET is not configured, reject everything (otherwise a request with no header would match "undefined").
+  const webhookSecret = process.env.EMAIL_WEBHOOK_SECRET;
+  if (!webhookSecret || req.headers['x-webhook-secret'] !== webhookSecret) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 

@@ -17,8 +17,10 @@
 <div id="app-shell-root"></div>
 
 <template id="volcano-content">
+  <div class="mb-4"><span class="eyebrow">Volcano monitoring</span>
+    <h1 style="font-family:var(--font-display);font-weight:700;font-size:1.4rem;color:var(--canvas-heading);margin:.25rem 0 0;">Volcano status</h1></div>
   <div class="rain-card reveal-on-scroll mb-4">
-    <div class="card-eyebrow"><span>Taal Volcano</span><span class="demo-data-tag" style="background:var(--accent-cyan); color:#fff;">LIVE</span></div>
+    <div class="card-eyebrow"><span>Taal Volcano</span><span class="demo-data-tag" style="background:var(--accent-cyan-ink); color:#fff;">LIVE</span></div>
     <div class="d-flex flex-wrap justify-content-between align-items-start gap-3">
       <div class="d-flex align-items-start gap-2">
         <i class="bi bi-fire fs-2 dicon-in-view bi-anim" style="color:var(--status-warning); cursor:pointer;" title="Tap to see it erupt"></i>
@@ -41,7 +43,7 @@
   <div class="row g-4 mb-4">
     <div class="col-lg-5">
       <div class="rain-card reveal-on-scroll h-100">
-        <div class="card-eyebrow"><span>Conditions at Taal</span><span class="demo-data-tag" style="background:var(--accent-cyan); color:#fff;">LIVE</span></div>
+        <div class="card-eyebrow"><span>Conditions at Taal</span><span class="demo-data-tag" style="background:var(--accent-cyan-ink); color:#fff;">LIVE</span></div>
         <div id="wxLoading" style="padding:.25rem 0;">
           <span class="skeleton d-block mb-3" style="width:50%; height:2.2rem;"></span>
           <span class="skeleton d-block mb-3" style="width:60%; height:16px;"></span>
@@ -76,7 +78,7 @@
     </div>
     <div class="col-lg-7">
       <div class="rain-card reveal-on-scroll h-100">
-        <div class="card-eyebrow"><span>Location Map</span><span class="demo-data-tag" style="background:var(--accent-cyan); color:#fff;">LIVE</span></div>
+        <div class="card-eyebrow"><span>Location Map</span><span class="demo-data-tag" style="background:var(--accent-cyan-ink); color:#fff;">LIVE</span></div>
         <div class="map-frame"><div id="volcano-map"></div></div>
       </div>
     </div>

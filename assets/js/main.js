@@ -438,6 +438,9 @@ function renderAppShell(activePage, opts) {
   const user = RainAuth.requireLogin();
   if (!user) return null;
 
+  // Lets CSS give each hazard page its own accent colour (see style.css, "Page identity").
+  document.body.dataset.page = String(activePage || "").replace(/\.html$/, "");
+
   const isAdminRole = RainAuth.isAdmin(user);
   const navGroups = isAdminRole ? RAIN_NAV.admin : RAIN_NAV.resident;
   const initials = (user.name || "U").split(" ").map((s) => s[0]).slice(0, 2).join("").toUpperCase();

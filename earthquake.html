@@ -17,6 +17,8 @@
 <div id="app-shell-root"></div>
 
 <template id="earthquake-content">
+  <div class="mb-4"><span class="eyebrow">Seismic activity</span>
+    <h1 style="font-family:var(--font-display);font-weight:700;font-size:1.4rem;color:var(--canvas-heading);margin:.25rem 0 0;">Earthquake Monitor</h1></div>
   <div class="alert-banner level-advisory mb-4">
     <i class="bi bi-info-circle icon dicon" data-dicon="info-circle"></i>
     <div style="font-size:.86rem;">
@@ -78,7 +80,7 @@
     <div class="row g-4 mb-4">
       <div class="col-lg-5">
         <div class="rain-card reveal-on-scroll h-100">
-          <div class="card-eyebrow"><span>Nearest to You</span><span class="demo-data-tag" style="background:var(--accent-cyan); color:#fff;">LIVE</span></div>
+          <div class="card-eyebrow"><span>Nearest to You</span><span class="demo-data-tag" style="background:var(--accent-cyan-ink); color:#fff;">LIVE</span></div>
           <div id="qNearestEmpty" class="empty-state-inline d-none">
             <i class="bi bi-check-circle glyph dicon" data-dicon="check-circle"></i>
             <p>No tracked earthquakes match the current time window and magnitude filter.</p>
@@ -98,7 +100,7 @@
       </div>
       <div class="col-lg-7">
         <div class="rain-card reveal-on-scroll h-100" style="padding-bottom:1rem;">
-          <div class="card-eyebrow"><span>Epicenter Map</span><span class="demo-data-tag" style="background:var(--accent-cyan); color:#fff;">LIVE</span></div>
+          <div class="card-eyebrow"><span>Epicenter Map</span><span class="demo-data-tag" style="background:var(--accent-cyan-ink); color:#fff;">LIVE</span></div>
           <div class="map-frame"><div id="quake-map"></div></div>
         </div>
       </div>
