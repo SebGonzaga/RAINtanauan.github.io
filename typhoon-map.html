@@ -96,15 +96,48 @@
   const user = renderAppShell("typhoon-map.html", { title: "Typhoon & Satellite Map" });
   const $ = (id) => document.getElementById(id);
   const CARTO_API_KEY = "cb1_3qde_1_313d908e961a073e7e5de450"; // same client-side CARTO key the other RAIN maps use
-  // GIBS tile matrix for this layer was not verified from the build sandbox; if frames stay blank, adjust MATRIX/MAX_NATIVE_ZOOM.
+  // Himawari-9 AHI Band 13 (clean IR) from NASA GIBS. NASA lists this near-real-time layer under the /nrt/ and /all/
+  // endpoints (not necessarily /best/), and the newest frame can lag by hours, so init() PROBES for a working
+  // endpoint + latest time instead of hard-coding one.
   const GIBS_LAYER = "Himawari_AHI_Band13_Clean_Infrared_v0_NRT_ZENJPEG", MATRIX = "GoogleMapsCompatible_Level6", MAX_NATIVE_ZOOM = 6;
-  const STEP_MIN = 30, FRAMES = 12, LAG_MIN = 60; // newest frame is requested LAG_MIN minutes behind "now" so tiles exist
+  const GIBS_ENDPOINTS = ["best", "nrt", "all"];
+  const STEP_MIN = 30, FRAMES = 12;
+  const PROBE_LAGS_MIN = [30, 60, 90, 120, 180, 240, 360, 480, 720]; // how far behind "now" to look for the newest frame
   const pad = (n) => String(n).padStart(2, "0");
   const iso = (d) => d.getUTCFullYear() + "-" + pad(d.getUTCMonth() + 1) + "-" + pad(d.getUTCDate()) + "T" + pad(d.getUTCHours()) + ":" + pad(d.getUTCMinutes()) + ":00Z";
 
-  function frameTimes() {
-    const end = new Date(Math.floor((Date.now() - LAG_MIN * 60000) / (STEP_MIN * 60000)) * STEP_MIN * 60000);
-    return Array.from({ length: FRAMES }, (_, i) => new Date(end.getTime() - (FRAMES - 1 - i) * STEP_MIN * 60000));
+  const gibsPath = (ep, t) => "/wmts/epsg3857/" + ep + "/" + GIBS_LAYER + "/default/" + iso(t) + "/" + MATRIX;
+  const snap = (lagMin) => new Date(Math.floor((Date.now() - lagMin * 60000) / (STEP_MIN * 60000)) * STEP_MIN * 60000);
+
+  // Loads one tile that sits over the Philippines (z3 x6 y3) and checks it is a real picture, not a blank/missing tile.
+  function probeTile(ep, t) {
+    return new Promise((resolve) => {
+      const img = new Image(); img.crossOrigin = "anonymous";
+      let to = null;
+      const done = (ok) => { clearTimeout(to); img.onload = img.onerror = null; resolve(ok); };
+      to = setTimeout(() => done(false), 8000);
+      img.onerror = () => done(false);
+      img.onload = () => {
+        try {
+          const c = document.createElement("canvas"); c.width = c.height = 32;
+          const g = c.getContext("2d"); g.drawImage(img, 0, 0, 32, 32);
+          const d = g.getImageData(0, 0, 32, 32).data; let lo = 255, hi = 0, vis = 0;
+          for (let i = 0; i < d.length; i += 4) { if (d[i + 3] > 0) vis++; lo = Math.min(lo, d[i]); hi = Math.max(hi, d[i]); }
+          done(vis > 20 && hi - lo > 8);
+        } catch (e) { done(img.naturalWidth > 0); }
+      };
+      img.src = "https://gibs.earthdata.nasa.gov" + gibsPath(ep, t) + "/3/3/6.jpg";
+    });
+  }
+  // Newest time (and endpoint) that actually has imagery; null if GIBS has nothing recent or can't be reached.
+  async function findLatest() {
+    for (const lag of PROBE_LAGS_MIN) {
+      const t = snap(lag);
+      const hits = await Promise.all(GIBS_ENDPOINTS.map((ep) => probeTile(ep, t).then((ok) => ok ? ep : null)));
+      const ep = hits.find(Boolean);
+      if (ep) return { ep, end: t };
+    }
+    return null;
   }
   const phTime = (d) => d.toLocaleString("en-PH", { timeZone: "Asia/Manila", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: false }) + " PHT · " + pad(d.getUTCHours()) + ":" + pad(d.getUTCMinutes()) + " UTC";
 
@@ -125,20 +158,15 @@
     $("tmBase").addEventListener("change", (e) => { if (e.target.value === "sat") { map.removeLayer(street); photo.addTo(map).bringToBack(); } else { map.removeLayer(photo); street.addTo(map).bringToBack(); } });
 
     // --- satellite animation: one tile layer per frame, preloaded, opacity-switched
-    const times = frameTimes(), layers = [], errs = new Array(FRAMES).fill(0), loads = new Array(FRAMES).fill(0);
-    let idx = FRAMES - 1, timer = null;
-    times.forEach((t, i) => {
-      const url = "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/" + GIBS_LAYER + "/default/" + iso(t) + "/" + MATRIX + "/{z}/{y}/{x}.jpg";
-      const l = L.tileLayer(url, { opacity: 0, maxNativeZoom: MAX_NATIVE_ZOOM, maxZoom: 12, updateWhenIdle: true, keepBuffer: 1, crossOrigin: true });
-      l.on("tileload", () => { loads[i]++; status(); }); l.on("tileerror", () => { errs[i]++; status(); });
-      layers.push(l);
-    });
+    let times = [], layers = []; const errs = new Array(FRAMES).fill(0), loads = new Array(FRAMES).fill(0);
+    let idx = FRAMES - 1, timer = null, probing = true, noImagery = false;
     const slider = $("tmSlider"); slider.max = FRAMES - 1; slider.value = idx;
     function status() {
       const bad = errs.reduce((a, b) => a + b, 0), ok = loads.reduce((a, b) => a + b, 0);
-      $("tmStatus").textContent = !$("tmSat").checked ? "Satellite loop is off." : ok === 0 && bad > 0 ? "Satellite imagery could not be loaded (" + bad + " tile errors). It may be temporarily unavailable; use PAGASA and other official sources." : bad ? bad + " tile(s) failed to load; some frames may be incomplete." : ok ? "Loaded " + ok + " tiles across " + FRAMES + " frames." : "Loading satellite frames…";
+      $("tmStatus").textContent = !$("tmSat").checked ? "Satellite loop is off." : probing ? "Finding the latest satellite frame…" : noImagery ? "NASA GIBS has no recent Himawari frames right now (or could not be reached). Try again in a few minutes, or use PAGASA and JMA satellite pages." : ok === 0 && bad > 0 ? "Satellite imagery could not be loaded (" + bad + " tile errors). It may be temporarily unavailable; use PAGASA and other official sources." : bad ? bad + " tile(s) failed to load; some frames may be incomplete." : ok ? "Loaded " + ok + " tiles across " + FRAMES + " frames." : "Loading satellite frames…";
     }
     function show(i) {
+      if (!times[i]) return;
       idx = i; slider.value = i;
       layers.forEach((l, k) => l.setOpacity(k === i ? 0.8 : 0));
       $("tmFrameTime").textContent = phTime(times[i]);
@@ -146,10 +174,25 @@
     function setSat(on) { layers.forEach((l) => on ? l.addTo(map) : map.removeLayer(l)); if (on) show(idx); else { stop(); $("tmFrameTime").textContent = "Satellite loop off"; } status(); }
     function play() { if (timer) return stop(); $("tmPlay").innerHTML = '<i class="bi bi-pause-fill"></i> Pause'; timer = setInterval(() => show((idx + 1) % FRAMES), 700); }
     function stop() { if (timer) clearInterval(timer); timer = null; $("tmPlay").innerHTML = '<i class="bi bi-play-fill"></i> Play'; }
-    $("tmPlay").addEventListener("click", () => { if ($("tmSat").checked) play(); });
+    $("tmPlay").addEventListener("click", () => { if ($("tmSat").checked && layers.length) play(); });
     slider.addEventListener("input", () => { stop(); show(Number(slider.value)); });
     $("tmSat").addEventListener("change", (e) => setSat(e.target.checked));
-    setSat(true);
+    async function buildFrames() {
+      status();
+      const found = await findLatest(); probing = false;
+      if (!found) { noImagery = true; $("tmFrameTime").textContent = "No satellite frames"; status(); return; }
+      times = Array.from({ length: FRAMES }, (_, i) => new Date(found.end.getTime() - (FRAMES - 1 - i) * STEP_MIN * 60000));
+      layers = times.map((t, i) => {
+        const url = "https://gibs-{s}.earthdata.nasa.gov" + gibsPath(found.ep, t) + "/{z}/{y}/{x}.jpg";
+        const l = L.tileLayer(url, { subdomains: ["a", "b"], opacity: 0, maxNativeZoom: MAX_NATIVE_ZOOM, maxZoom: 12, updateWhenIdle: true, keepBuffer: 1, crossOrigin: true });
+        l.on("tileload", () => { loads[i]++; status(); });
+        l.on("tileerror", (e) => { errs[i]++; if (errs[i] === 1) console.warn("GIBS tile error", e.tile && e.tile.src); status(); });
+        return l;
+      });
+      idx = FRAMES - 1; slider.max = FRAMES - 1; slider.value = idx;
+      if ($("tmSat").checked) setSat(true);
+    }
+    buildFrames();
     map.on("zoomend moveend", () => { layers.forEach((l, k) => { if (k !== idx && map.hasLayer(l)) l.setOpacity(0); }); });
     window.addEventListener("pagehide", stop);
     setTimeout(() => map.invalidateSize(), 200);
