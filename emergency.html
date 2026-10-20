@@ -29,22 +29,65 @@
     <button type="button" class="btn-emergency" style="width:auto;" id="activateEmergencyBtn" data-press><i class="bi bi-broadcast dicon" data-dicon="broadcast"></i> ACTIVATE EMERGENCY MODE</button>
   </div>
 
-  <div class="rain-card reveal-on-scroll mb-4">
-    <div class="card-eyebrow"><span>Emergency Contacts</span></div>
-    <div class="row g-3" id="contactGrid"></div>
-  </div>
-
-  <div class="rain-card reveal-on-scroll" id="evac">
-    <div class="card-eyebrow"><span>Evacuation Centers</span><span class="demo-data-tag" style="background:var(--accent-cyan-ink); color:#fff;">Source: Tanauan City CDRRMO</span></div>
-    <div class="d-flex align-items-center gap-2 mb-3" id="evacLocNote" style="font-size:.78rem; color:var(--ink-400);"></div>
-    <div class="map-filter-row mb-3" id="evacFilters">
-      <button class="map-filter-btn light active" data-filter="all">All</button>
-      <button class="map-filter-btn light" data-filter="shelter"><span class="legend-dot dot-shelter"></span> Shelters &amp; Schools</button>
-      <button class="map-filter-btn light" data-filter="government"><span class="legend-dot dot-government"></span> Barangay &amp; City Halls</button>
-      <button class="map-filter-btn light" data-filter="mall"><span class="legend-dot dot-mall"></span> SM Malls</button>
+  <div class="row g-4 align-items-start">
+    <!-- LEFT: emergency contacts -->
+    <div class="col-12 col-lg-6">
+      <div class="rain-card reveal-on-scroll">
+        <div class="card-eyebrow"><span>Emergency Contacts</span></div>
+        <div class="row g-3" id="contactGrid"></div>
+      </div>
     </div>
-    <div class="map-frame mb-3"><div id="evac-map"></div></div>
-    <div class="d-flex flex-column gap-3" id="evacList"></div>
+
+    <!-- RIGHT: current location + evacuation map -->
+    <div class="col-12 col-lg-6 d-flex flex-column gap-4">
+      <div class="rain-card loc-card reveal-on-scroll">
+        <div class="d-flex flex-wrap align-items-center justify-content-between gap-2">
+          <div>
+            <div class="loc-title"><i class="bi bi-geo-alt-fill"></i> Current location</div>
+            <div id="locStatus" class="loc-status">Not pinned yet.</div>
+          </div>
+          <div class="d-flex flex-wrap gap-2">
+            <button type="button" class="btn-rain" id="pinGpsBtn"><i class="bi bi-crosshair"></i> Pin my location</button>
+            <button type="button" class="btn-rain btn-rain-ghost" id="pinMapBtn"><i class="bi bi-pin-map"></i> Pin on map</button>
+            <button type="button" class="btn-rain btn-rain-ghost" id="nearestBtn" disabled><i class="bi bi-compass"></i> Nearest shelters</button>
+            <button type="button" class="btn-rain btn-rain-ghost" id="clearPinBtn" disabled><i class="bi bi-x-lg"></i></button>
+          </div>
+        </div>
+      </div>
+
+      <div class="rain-card reveal-on-scroll" id="evac">
+        <div class="card-eyebrow"><span>Evacuation Centers</span><span class="demo-data-tag" style="background:var(--accent-cyan-ink); color:#fff;">Source: Tanauan City CDRRMO</span></div>
+        <div class="map-filter-row mb-2" id="evacFilters">
+          <button class="map-filter-btn light active" data-filter="all">All</button>
+          <button class="map-filter-btn light" data-filter="shelter"><span class="legend-dot dot-shelter"></span> Shelters &amp; Schools (<span id="shelterCount">0</span>)</button>
+          <button class="map-filter-btn light" data-filter="barangay"><span class="legend-dot" style="background:#7c3aed;"></span> Barangay Halls (<span id="brgyCount">0</span>)</button>
+        </div>
+        <div class="mb-2" style="font-size:.75rem; color:var(--ink-400);">
+          <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#7c3aed;border:2px solid #fff;box-shadow:0 0 0 1px #7c3aed;vertical-align:middle;"></span> Verified hall pin
+          &nbsp;&nbsp;<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#ddd6fe;border:2px dashed #7c3aed;vertical-align:middle;"></span> Approximate (barangay centre — not a confirmed hall)
+        </div>
+        <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
+          <button type="button" class="map-filter-btn light active" id="boundaryToggle"><span class="legend-dot" style="background:#1d4ed8;"></span> Barangay boundaries</button>
+          <button type="button" class="map-filter-btn light" id="svModeBtn"><i class="bi bi-signpost-2"></i> Street view: click map</button>
+        </div>
+        <input id="evacSearch" class="form-control form-control-sm mb-3" list="evacOptions" autocomplete="off" placeholder="Search a shelter, school or barangay hall…" aria-label="Search evacuation centers">
+        <datalist id="evacOptions"></datalist>
+        <div class="map-frame mb-3"><div id="evac-map"></div></div>
+        <div id="evacResult" class="d-flex flex-column gap-2"></div>
+        <div id="svPanel" class="sv-panel mt-3" hidden>
+          <div class="sv-head">
+            <div><i class="bi bi-signpost-2"></i> <strong id="svTitle">Street view</strong> <span id="svCoords" class="text-muted-rain" style="font-size:.75rem;"></span></div>
+            <div class="d-flex gap-2">
+              <a id="svExternal" class="btn-rain btn-rain-ghost btn-rain-sm" target="_blank" rel="noopener"><i class="bi bi-box-arrow-up-right"></i> Google Maps</a>
+              <button type="button" class="btn-rain btn-rain-ghost btn-rain-sm" id="svSizeBtn"><i class="bi bi-arrows-expand"></i> Larger</button>
+              <button type="button" class="btn-rain btn-rain-ghost btn-rain-sm" id="svClose"><i class="bi bi-x-lg"></i> Close</button>
+            </div>
+          </div>
+          <iframe id="svFrame" title="Street view" loading="lazy" allowfullscreen referrerpolicy="no-referrer-when-downgrade"></iframe>
+          <div class="sv-foot" id="svNote"></div>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -53,6 +96,7 @@
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
 <script src="assets/js/rain-map-layers.js"></script>
+<script src="assets/js/tanauan-boundaries.js"></script>
 <script src="assets/js/animations.js"></script>
 <script src="assets/js/icons.js"></script>
 <script src="assets/js/demo-data.js"></script>
@@ -63,153 +107,257 @@
 <script src="assets/js/main.js"></script>
 <script type="module">
   await RainAuth.init();
-  // CARTO Basemaps API key — required since CARTO deprecated anonymous
-  // keyless raster tile access (tiles otherwise render stamped "API KEY
-  // REQUIRED"). Like a Mapbox access token, this is meant to ship in
-  // client-side code and isn't a secret that needs server-side hiding.
+  // CARTO Basemaps API key (client-side key, not a secret).
   const CARTO_API_KEY = "cb1_3qde_1_313d908e961a073e7e5de450";
+  // Street view: paste a Google Maps Embed API key for the official embed; leave empty for the keyless embed.
+  const GOOGLE_MAPS_KEY = "";
   const user = renderAppShell("emergency.html", { title: "Emergency" });
 
-  // haversineKm() now lives in assets/js/main.js — shared across pages.
-  function initEmergencyPage() {
-    document.getElementById("app-content").appendChild(document.getElementById("emergency-content").content.cloneNode(true));
+  const BARANGAYS = RAIN_DEMO.barangays || [];   // 48 barangay halls
+  const SHELTERS = RAIN_DEMO.evacuationCenters || []; // shelters & schools
+  const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
+  function initEmergencyPage() {
+    const content = document.getElementById("app-content");
+    content.style.maxWidth = "1240px";
+    content.appendChild(document.getElementById("emergency-content").content.cloneNode(true));
     document.getElementById("activateEmergencyBtn").addEventListener("click", () => RainEmergencyMode.open());
 
-    const contactGrid = document.getElementById("contactGrid");
-    const iconMap = { Police: "bi-shield-lock", Fire: "bi-fire", Medical: "bi-heart-pulse", NDRRMC: "bi-diagram-3" };
-    // Emergency contacts don't change often, but save them anyway so the
-    // "SOS" quick-dial numbers are guaranteed available offline even if a
-    // resident never scrolls this page before losing connection.
+    // ---------- Contacts ----------
+    const iconMap = {
+      Police: "bi-shield-lock", Fire: "bi-fire", Medical: "bi-heart-pulse", NDRRMC: "bi-diagram-3",
+      CDRRMO: "bi-diagram-3", Traffic: "bi-cone-striped", "Coast Guard": "bi-life-preserver",
+    };
     RainOffline.save("emergencyContacts", RAIN_DEMO.emergencyContacts);
+    const contactGrid = document.getElementById("contactGrid");
     RAIN_DEMO.emergencyContacts.forEach((c) => {
+      const nums = c.numbers || [c.number];
       const col = document.createElement("div");
-      col.className = "col-6 col-md-3";
+      col.className = "col-12 col-sm-6";
       col.innerHTML = `
-        <div class="text-center p-3" style="border:1px solid var(--surface-line); border-radius:14px;">
-          <i class="bi ${iconMap[c.tag] || "bi-telephone"} fs-3 mb-2 dicon-in-view bi-anim" style="color:var(--status-critical);"></i>
-          <div style="font-size:.82rem; color:var(--ink-600); margin-bottom:.6rem;">${c.name}</div>
-          <a href="tel:${c.number.replace(/[^\d+]/g, "")}" class="btn-emergency" data-press><i class="bi bi-telephone-fill dicon-in-view bi-anim"></i> CALL ${c.number}</a>
+        <div class="text-center p-3 h-100" style="border:1px solid var(--surface-line); border-radius:14px;">
+          <i class="bi ${iconMap[c.tag] || "bi-telephone"} fs-3 mb-2" style="color:var(--status-critical);"></i>
+          <div style="font-size:.85rem; font-weight:600; color:var(--ink-600); margin-bottom:.6rem;">${esc(c.name)}</div>
+          <div class="d-flex flex-column gap-2">
+            ${nums.map((n) => `<a href="tel:${n.replace(/[^\d+]/g, "")}" class="btn-emergency" data-press><i class="bi bi-telephone-fill"></i> CALL ${n}</a>`).join("")}
+          </div>
         </div>`;
       contactGrid.appendChild(col);
     });
 
-    // Fallback used only if the browser has no geolocation support, the user
-    // denies the permission prompt, or the request times out — same pattern
-    // and demo point (Tanauan City, Batangas) as dashboard.html. Never presented as
-    // if it were the user's real GPS reading.
-    const FALLBACK_LAT = 14.0863, FALLBACK_LNG = 121.1497;
-    let evacMap = null;
+    // ---------- Map ----------
+    const map = L.map("evac-map").setView([14.0863, 121.1497], 12);
+    const baseTiles = L.tileLayer(`https://basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png?key=${CARTO_API_KEY}`, { attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>', maxZoom: 20 }).addTo(map);
+    RainMapLayers.attach(map, { base: baseTiles, baseName: "Default" });
 
-    // Category → { marker icon class/glyph, list badge label } so shelters,
-    // government buildings (barangay/city/municipal halls), and SM malls
-    // that accept evacuees are all visually distinct on the map and list.
-    const CATEGORY_META = {
-      shelter: { icon: "bi-house-heart-fill", label: "Shelter" },
-      government: { icon: "bi-bank2", label: "Government" },
-      mall: { icon: "bi-shop", label: "Mall" },
+    // Barangay boundaries: clear blue lines, name on hover.
+    map.createPane("rain-lines").style.zIndex = 350;
+    const boundaryLayer = L.geoJSON(window.RAIN_BOUNDARIES, {
+      pane: "rain-lines",
+      style: { color: "#1d4ed8", weight: 2.5, opacity: 1, fill: true, fillColor: "#3b82f6", fillOpacity: 0.05 },
+      onEachFeature: (f, l) => {
+        l.bindTooltip(f.properties.name, { sticky: true });
+        l.on("mouseover", () => l.setStyle({ weight: 4, fillOpacity: 0.18 }));
+        l.on("mouseout", () => boundaryLayer.resetStyle(l));
+      },
+    }).addTo(map);
+    try { map.fitBounds(boundaryLayer.getBounds(), { padding: [10, 10] }); } catch (e) {}
+    const bBtn = document.getElementById("boundaryToggle");
+    bBtn.onclick = () => {
+      const on = map.hasLayer(boundaryLayer);
+      if (on) map.removeLayer(boundaryLayer); else boundaryLayer.addTo(map);
+      bBtn.classList.toggle("active", !on);
     };
 
-    function renderEvacSection(userLat, userLng, isRealLocation) {
-      const locNote = document.getElementById("evacLocNote");
-      const offlineSuffix = RainOffline.isOnline() ? "" : ` <span class="cached-data-tag"><i class="bi bi-cloud-slash"></i> Offline</span>`;
-      locNote.innerHTML = (isRealLocation
-        ? `<i class="bi bi-geo-alt-fill" style="color:var(--accent-cyan);"></i> Distances are from your current location.`
-        : `<i class="bi bi-geo-alt"></i> GPS unavailable — showing distances from Tanauan City, Batangas. <button type="button" class="btn-rain btn-rain-ghost btn-rain-sm" id="retryLocationBtn" style="padding:.1rem .6rem; margin-left:.3rem;">Enable location</button>`) + offlineSuffix;
-      if (!isRealLocation) {
-        document.getElementById("retryLocationBtn").addEventListener("click", requestLocation);
-      }
+    // ---------- Pins: shelters/schools + barangay halls ----------
+    let userPos = null, userMarker = null;
+    const layers = { shelter: L.layerGroup(), barangay: L.layerGroup() };
+    const items = [];
+    const km = (it) => (userPos ? haversineKm(userPos.lat, userPos.lng, it.lat, it.lng) : null);
+    const dirHref = (it) => userPos
+      ? `https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=${userPos.lat},${userPos.lng};${it.lat},${it.lng}`
+      : `https://www.openstreetmap.org/directions?to=${it.lat},${it.lng}`;
+    const svLink = (it) => `<a href="#" onclick="return false;" data-sv-lat="${it.lat}" data-sv-lng="${it.lng}" data-sv-name="${esc(it.name)}"><i class="bi bi-signpost-2"></i> Street view</a>`;
+    const popupHtml = (it) =>
+      `<strong>${esc(it.name)}</strong><br>${esc(it.type)}<br>${esc(it.address)}` +
+      (it.approx ? `<br><em style="color:#b45309;">Approximate — barangay centre, not a confirmed hall pin.</em>` : "") +
+      `<br>${it.lat.toFixed(4)}° N, ${it.lng.toFixed(4)}° E` +
+      (km(it) !== null ? `<br>${km(it).toFixed(1)} km from your pin` : "") +
+      `<br><a target="_blank" rel="noopener" href="${dirHref(it)}">Directions</a> · ${svLink(it)}`;
 
-      if (evacMap) evacMap.remove(); // re-render (e.g. after "Enable location") needs a fresh Leaflet instance on the same container
-      const map = L.map("evac-map").setView([userLat, userLng], 11);
-      evacMap = map;
-      const baseTiles = L.tileLayer(`https://basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png?key=${CARTO_API_KEY}`, { attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>', maxZoom: 20 }).addTo(map);
-      RainMapLayers.attach(map, { base: baseTiles, baseName: "Default" });
-      L.marker([userLat, userLng], { icon: rainPinIcon("user", "bi-person-fill"), title: "You are here" })
-        .addTo(map)
-        .bindPopup(isRealLocation ? "Your location" : "Approximate location (GPS unavailable — showing Tanauan City, Batangas)");
+    SHELTERS.forEach((c) => {
+      const it = { kind: "shelter", label: c.name, name: c.name, type: c.type || "Shelter", address: c.address || "Tanauan City", lat: c.lat, lng: c.lng };
+      it.marker = L.marker([c.lat, c.lng], { icon: rainPinIcon("shelter", "bi-house-heart-fill"), title: c.name }).addTo(layers.shelter).bindPopup(() => popupHtml(it));
+      items.push(it);
+    });
+    BARANGAYS.forEach((b) => {
+      const style = b.approx
+        ? { radius: 8, color: "#7c3aed", weight: 2, dashArray: "3 3", fillColor: "#ddd6fe", fillOpacity: 0.7 }
+        : { radius: 8, color: "#ffffff", weight: 2, fillColor: "#7c3aed", fillOpacity: 0.95 };
+      const it = { kind: "barangay", label: "Brgy. " + b.name + " Hall", name: "Brgy. " + b.name + " Hall", type: "Barangay Hall", address: b.hall, approx: b.approx, lat: b.lat, lng: b.lng };
+      it.marker = L.circleMarker([b.lat, b.lng], style).addTo(layers.barangay)
+        .bindTooltip(b.name + (b.approx ? " (approx.)" : ""), { direction: "top" }).bindPopup(() => popupHtml(it));
+      items.push(it);
+    });
+    document.getElementById("shelterCount").textContent = SHELTERS.length;
+    document.getElementById("brgyCount").textContent = BARANGAYS.length;
+    Object.values(layers).forEach((l) => l.addTo(map));
 
-      const evacList = document.getElementById("evacList");
-      evacList.innerHTML = "";
-      const categoryLayers = { shelter: L.layerGroup(), government: L.layerGroup(), mall: L.layerGroup() };
-      const listItemsByCategory = { shelter: [], government: [], mall: [] };
-
-      const sortedCenters = RAIN_DEMO.evacuationCenters
-        .map((c) => ({ ...c, dist: haversineKm(userLat, userLng, c.lat, c.lng) }))
-        .sort((a, b) => a.dist - b.dist);
-
-      // Snapshot the nearest-first list (with real distances) so the app
-      // shell's offline reminder can name the closest evacuation center
-      // even after this page is closed and the connection drops.
-      RainOffline.save("evacuationCenters", sortedCenters);
-
-      sortedCenters.forEach((c) => {
-          const cat = c.category || "shelter";
-          const meta = CATEGORY_META[cat] || CATEGORY_META.shelter;
-
-          L.marker([c.lat, c.lng], { icon: rainPinIcon(cat, meta.icon) })
-            .addTo(categoryLayers[cat])
-            .bindPopup(`<strong>${c.name}</strong><br>${c.type || meta.label}<br>${c.address}`);
-
-          const el = document.createElement("div");
-          el.className = "d-flex justify-content-between align-items-start gap-3 reveal-on-scroll";
-          el.style.cssText = "border-bottom:1px solid var(--surface-line); padding-bottom:1rem;";
-          el.innerHTML = `
-            <div>
-              <div style="font-weight:700; color:var(--navy-950);">${c.name}<span class="evac-type-badge ${cat}">${c.type || meta.label}</span></div>
-              <div style="font-size:.85rem; color:var(--ink-600);">${c.address}</div>
-              <div style="font-size:.8rem; color:var(--ink-400);"><i class="bi bi-telephone"></i> ${c.contact} · ${c.facilities}</div>
-            </div>
-            <div class="text-end flex-shrink-0">
-              <div style="font-weight:700; color:var(--accent-cyan);">${c.dist.toFixed(1)} km</div>
-              <a class="btn-rain btn-rain-ghost btn-rain-sm mt-1" target="_blank" rel="noopener" href="https://www.openstreetmap.org/directions?to=${c.lat},${c.lng}"><i class="bi bi-signpost-split"></i> Directions</a>
-            </div>`;
-          evacList.appendChild(el);
-          listItemsByCategory[cat].push(el);
-        });
-
-      if (!sortedCenters.length) {
-        evacList.innerHTML = '<p class="text-muted-rain mb-0">The evacuation center list from the Tanauan City CDRRMO is not available yet. Please contact the CDRRMO or your barangay hall for the nearest evacuation center.</p>';
-      }
-
-      Object.values(categoryLayers).forEach((layer) => layer.addTo(map));
-
-      document.querySelectorAll("#evacFilters .map-filter-btn").forEach((btn) => {
-        btn.addEventListener("click", () => {
-          document.querySelectorAll("#evacFilters .map-filter-btn").forEach((b) => b.classList.remove("active"));
-          btn.classList.add("active");
-          const f = btn.dataset.filter;
-          Object.entries(categoryLayers).forEach(([cat, layer]) => {
-            const show = f === "all" || f === cat;
-            if (show && !map.hasLayer(layer)) layer.addTo(map);
-            else if (!show && map.hasLayer(layer)) map.removeLayer(layer);
-            listItemsByCategory[cat].forEach((el) => { el.style.display = show ? "" : "none"; });
-          });
-        });
+    // Filters
+    function setFilter(f) {
+      document.querySelectorAll("#evacFilters .map-filter-btn").forEach((b) => b.classList.toggle("active", b.dataset.filter === f));
+      Object.entries(layers).forEach(([cat, layer]) => {
+        const show = f === "all" || f === cat;
+        if (show && !map.hasLayer(layer)) layer.addTo(map); else if (!show && map.hasLayer(layer)) map.removeLayer(layer);
       });
-
-      initializeAnimations();
-      setTimeout(() => map.invalidateSize(), 200);
-    }
-
-    // Resolve the user's real location before drawing the map/list, so the
-    // "km away" figures reflect where they actually are, not a fixed demo
-    // point. Falls back to Tanauan City, Batangas if geolocation is unsupported,
-    // denied, or times out (see FALLBACK_LAT/LNG above).
-    function requestLocation() {
-      const locNote = document.getElementById("evacLocNote");
-      locNote.innerHTML = `<i class="bi bi-geo-alt"></i> Locating you…`;
-      if (navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition(
-          (pos) => renderEvacSection(pos.coords.latitude, pos.coords.longitude, true),
-          () => renderEvacSection(FALLBACK_LAT, FALLBACK_LNG, false),
-          { timeout: 8000 }
-        );
-      } else {
-        renderEvacSection(FALLBACK_LAT, FALLBACK_LNG, false);
+      if (f !== "all") {
+        const pts = items.filter((i) => i.kind === f).map((i) => [i.lat, i.lng]);
+        if (pts.length) map.fitBounds(L.latLngBounds(pts), { padding: [30, 30] });
       }
     }
-    requestLocation();
+    document.querySelectorAll("#evacFilters .map-filter-btn").forEach((b) => b.addEventListener("click", () => setFilter(b.dataset.filter)));
+
+    // ---------- Search: results only appear when you look for something ----------
+    const resultBox = document.getElementById("evacResult");
+    const search = document.getElementById("evacSearch");
+    const opts = document.getElementById("evacOptions");
+    items.forEach((it) => { const o = document.createElement("option"); o.value = it.label; opts.appendChild(o); });
+
+    function focusItem(it) {
+      if (!map.hasLayer(layers[it.kind])) setFilter("all");
+      map.flyTo([it.lat, it.lng], 17, { duration: 0.8 });
+      map.once("moveend", () => it.marker.openPopup());
+    }
+    function showResults(list, heading) {
+      if (!list.length) { resultBox.innerHTML = `<div class="text-muted-rain" style="font-size:.85rem;">No match found.</div>`; return; }
+      resultBox.innerHTML = (heading ? `<div class="result-heading">${esc(heading)}</div>` : "") + list.map((it) => {
+        const d = km(it);
+        return `<div class="result-card">
+          <div class="flex-grow-1">
+            <div style="font-weight:700; color:var(--navy-950);">${esc(it.name)}<span class="evac-type-badge ${it.kind === "shelter" ? "shelter" : ""}">${esc(it.type)}</span></div>
+            <div style="font-size:.82rem; color:var(--ink-600);">${esc(it.address)}${it.approx ? " · approx. location" : ""}</div>
+            ${d !== null ? `<div style="font-size:.8rem; font-weight:700; color:var(--accent-cyan);">${d.toFixed(1)} km from your pin</div>` : ""}
+          </div>
+          <div class="d-flex flex-wrap gap-1 justify-content-end">
+            <button type="button" class="btn-rain btn-rain-sm" data-locate="${items.indexOf(it)}"><i class="bi bi-geo"></i> Show</button>
+            <a class="btn-rain btn-rain-ghost btn-rain-sm" target="_blank" rel="noopener" href="${dirHref(it)}"><i class="bi bi-signpost-split"></i> Directions</a>
+            <button type="button" class="btn-rain btn-rain-ghost btn-rain-sm" data-sv-lat="${it.lat}" data-sv-lng="${it.lng}" data-sv-name="${esc(it.name)}"><i class="bi bi-signpost-2"></i> Street view</button>
+          </div>
+        </div>`;
+      }).join("");
+    }
+    search.addEventListener("input", () => {
+      const q = search.value.trim().toLowerCase();
+      if (q.length < 2) { resultBox.innerHTML = ""; return; }
+      const exact = items.find((i) => i.label.toLowerCase() === q);
+      if (exact) { showResults([exact]); focusItem(exact); return; }
+      showResults(items.filter((i) => (i.label + " " + i.address).toLowerCase().includes(q)).slice(0, 8));
+    });
+    resultBox.addEventListener("click", (ev) => {
+      const b = ev.target.closest("[data-locate]");
+      if (b) focusItem(items[Number(b.dataset.locate)]);
+    });
+
+    // ---------- Current location pin ----------
+    const locStatus = document.getElementById("locStatus");
+    const nearestBtn = document.getElementById("nearestBtn"), clearBtn = document.getElementById("clearPinBtn");
+    const pinMapBtn = document.getElementById("pinMapBtn");
+    let pinMode = false, svMode = false;
+    function setMode(which) {
+      pinMode = which === "pin"; svMode = which === "sv";
+      pinMapBtn.classList.toggle("active", pinMode);
+      document.getElementById("svModeBtn").classList.toggle("active", svMode);
+      map.getContainer().style.cursor = which ? "crosshair" : "";
+    }
+    function saveOffline() {
+      const list = SHELTERS.map((c) => ({ ...c, dist: userPos ? haversineKm(userPos.lat, userPos.lng, c.lat, c.lng) : null }));
+      if (userPos) list.sort((a, b) => a.dist - b.dist);
+      RainOffline.save("evacuationCenters", list);
+    }
+    function setPin(lat, lng, how) {
+      userPos = { lat, lng };
+      if (!userMarker) {
+        userMarker = L.marker([lat, lng], { icon: rainPinIcon("user", "bi-person-fill"), draggable: true, title: "You are here (drag to adjust)", zIndexOffset: 900 })
+          .addTo(map).bindPopup("Your pinned location — drag the pin to adjust.");
+        userMarker.on("dragend", () => { const p = userMarker.getLatLng(); setPin(p.lat, p.lng, "adjusted"); });
+      } else userMarker.setLatLng([lat, lng]);
+      locStatus.innerHTML = `<i class="bi bi-check-circle-fill" style="color:#16a34a;"></i> Pinned (${how}): ${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+      nearestBtn.disabled = false; clearBtn.disabled = false;
+      saveOffline();
+    }
+    document.getElementById("pinGpsBtn").onclick = () => {
+      setMode(null);
+      if (!navigator.geolocation) { locStatus.textContent = "GPS not supported — use “Pin on map”."; return; }
+      locStatus.innerHTML = `<i class="bi bi-hourglass-split"></i> Locating you…`;
+      navigator.geolocation.getCurrentPosition(
+        (p) => { setPin(p.coords.latitude, p.coords.longitude, "GPS"); map.flyTo([p.coords.latitude, p.coords.longitude], 15); },
+        () => { locStatus.textContent = "GPS unavailable or denied — use “Pin on map” instead."; },
+        { timeout: 10000, enableHighAccuracy: true });
+    };
+    pinMapBtn.onclick = () => {
+      setMode(pinMode ? null : "pin");
+      if (pinMode) locStatus.textContent = "Click the map where you are.";
+    };
+    nearestBtn.onclick = () => {
+      const near = items.filter((i) => i.kind === "shelter").sort((a, b) => km(a) - km(b)).slice(0, 5);
+      showResults(near, "Nearest shelters & schools to your pin");
+      if (near.length) map.fitBounds(L.latLngBounds([[userPos.lat, userPos.lng], ...near.slice(0, 3).map((i) => [i.lat, i.lng])]), { padding: [40, 40] });
+    };
+    clearBtn.onclick = () => {
+      if (userMarker) { map.removeLayer(userMarker); userMarker = null; }
+      userPos = null; nearestBtn.disabled = true; clearBtn.disabled = true;
+      locStatus.textContent = "Not pinned yet."; resultBox.innerHTML = ""; saveOffline();
+    };
+
+    // ---------- Street view ----------
+    const svPanel = document.getElementById("svPanel"), svFrame = document.getElementById("svFrame");
+    let svMarker = null;
+    const svSrc = (lat, lng) => GOOGLE_MAPS_KEY
+      ? `https://www.google.com/maps/embed/v1/streetview?key=${GOOGLE_MAPS_KEY}&location=${lat},${lng}&fov=90`
+      : `https://maps.google.com/maps?layer=c&cbll=${lat},${lng}&cbp=11,0,0,0,0&output=svembed`;
+    function openStreetView(lat, lng, name, place) {
+      svPanel.hidden = false;
+      document.getElementById("svTitle").textContent = name || "Street view";
+      document.getElementById("svCoords").textContent = lat.toFixed(5) + ", " + lng.toFixed(5);
+      document.getElementById("svExternal").href = `https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${lat},${lng}`;
+      document.getElementById("svNote").textContent = RainOffline.isOnline()
+        ? "No imagery here? Drag the pin to a nearby road, or use the Google Maps link."
+        : "You are offline — street view needs an internet connection.";
+      svFrame.src = svSrc(lat, lng);
+      if (place !== false) {
+        if (!svMarker) {
+          svMarker = L.marker([lat, lng], { draggable: true, icon: rainPinIcon("government", "bi-signpost-2"), title: "Street view point (drag me)", zIndexOffset: 1000 }).addTo(map);
+          svMarker.on("dragend", () => { const p = svMarker.getLatLng(); openStreetView(p.lat, p.lng, "Dropped pin", false); });
+        } else svMarker.setLatLng([lat, lng]);
+      }
+      svPanel.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }
+    document.getElementById("svModeBtn").onclick = () => setMode(svMode ? null : "sv");
+    document.getElementById("svClose").onclick = () => {
+      svPanel.hidden = true; svFrame.src = "about:blank";
+      if (svMarker) { map.removeLayer(svMarker); svMarker = null; }
+      setMode(null);
+    };
+    document.getElementById("svSizeBtn").onclick = (ev) => {
+      const big = svPanel.classList.toggle("sv-large");
+      ev.currentTarget.innerHTML = big ? '<i class="bi bi-arrows-collapse"></i> Smaller' : '<i class="bi bi-arrows-expand"></i> Larger';
+    };
+    const svHandler = (ev) => {
+      const t = ev.target.closest("[data-sv-lat]");
+      if (t) openStreetView(Number(t.dataset.svLat), Number(t.dataset.svLng), t.dataset.svName);
+    };
+    map.getContainer().addEventListener("click", svHandler);
+    resultBox.addEventListener("click", svHandler);
+
+    // One map click handler for both click-modes
+    map.on("click", (ev) => {
+      if (pinMode) { setPin(ev.latlng.lat, ev.latlng.lng, "manual"); setMode(null); }
+      else if (svMode) openStreetView(ev.latlng.lat, ev.latlng.lng, "Dropped pin");
+    });
+
+    saveOffline();
+    initializeAnimations();
+    setTimeout(() => map.invalidateSize(), 200);
   }
 
   if (user) initEmergencyPage();

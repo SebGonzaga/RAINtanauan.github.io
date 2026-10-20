@@ -72,6 +72,7 @@ const STATIC_ASSETS = [
   "./assets/js/supabase-client.js",
   "./assets/js/taal-places.js",
   "./assets/js/rain-map-layers.js",
+  "./assets/js/tanauan-boundaries.js",
   "./assets/js/rain-indices.js",
   "./assets/js/ai-digest-card.js",
   "./assets/icons/icon-192.png",

@@ -2740,3 +2740,29 @@ body[data-page="admin-incidents"]  {--page-accent:#e8703a;}
 /* Plain <label>s: readable on the canvas in either theme, and on cards. */
 .app-content label{color:var(--canvas-body);}
 .rain-card:not(.rain-card-dark) label{color:var(--ink-900);}
+
+/* ---------- Emergency page: street view, location card, search results (merged from emergency.github.io) ---------- */
+/* ---------- Street view panel ---------- */
+.sv-panel { border: 1px solid var(--surface-line); border-radius: 14px; overflow: hidden; background: #fff; }
+.sv-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .5rem;
+  padding: .6rem .9rem; color: var(--navy-950); border-bottom: 1px solid var(--surface-line); }
+#svFrame { display: block; width: 100%; height: 360px; border: 0; background: #e2e8f0; }
+.sv-panel.sv-large #svFrame { height: 70vh; }
+.sv-foot { padding: .4rem .9rem; font-size: .75rem; color: var(--ink-400); }
+.map-filter-btn.active#svModeBtn { background: var(--status-critical); border-color: var(--status-critical); }
+.leaflet-popup-content a[data-sv-lat] { color: var(--accent-cyan-ink); font-weight: 600; }
+
+/* ---------- Current location card + search results ---------- */
+.loc-card { background: linear-gradient(160deg, #1e40af, #1d4ed8); color: #fff; border-color: transparent; }
+.loc-title { font-weight: 800; letter-spacing: .12em; text-transform: uppercase; font-size: 1rem; }
+.loc-status { font-size: .8rem; opacity: .9; margin-top: .2rem; }
+.loc-card .btn-rain { background: #fff; color: #1d4ed8; }
+.loc-card .btn-rain-ghost { background: transparent; color: #fff; border-color: rgba(255,255,255,.6); }
+.loc-card .btn-rain-ghost:hover { background: rgba(255,255,255,.15); }
+.loc-card .btn-rain:disabled { opacity: .5; cursor: not-allowed; }
+.loc-card .btn-rain-ghost.active { background: #fff; color: #1d4ed8; }
+.result-heading { font-size: .75rem; font-weight: 700; text-transform: uppercase; letter-spacing: .1em; color: var(--ink-400); }
+.result-card { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .6rem;
+  border: 1px solid var(--surface-line); border-radius: 12px; padding: .7rem .9rem; }
+#evac-map{height:460px;}
+.map-filter-btn.light.active#svModeBtn{background:var(--status-critical); border-color:var(--status-critical); color:#fff;}
