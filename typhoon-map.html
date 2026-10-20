@@ -73,10 +73,11 @@
   <div class="rain-card" style="font-size:.8rem;">
     <b>Layer types and limitations</b>
     <ul class="mt-2 mb-0">
-      <li><b>Satellite loop:</b> <span class="demo-data-tag" style="background:#0f766e">OBSERVED</span> Himawari AHI Band 13 clean infrared (cold cloud tops appear bright), via NASA GIBS. Frames are 30 minutes apart over the last 6 hours, shown in Philippine time. Imagery can lag real time; frames that fail to load are skipped and counted below the map.</li>
+      <li><b>Satellite loop:</b> <span class="demo-data-tag" style="background:#0f766e">OBSERVED</span> Himawari-9 band 13 clean infrared (cold cloud tops appear bright), loaded from the Japan Meteorological Agency (JMA) &mdash; the same satellite data PAGASA uses &mdash; with NASA GIBS as a backup source. Frames are 30 minutes apart, shown in Philippine time. Imagery can lag real time; the source in use is named below the map.</li>
       <li><b>Cloud, wind, rain, pressure:</b> <span class="demo-data-tag" style="background:#b45309">MODEL / BLENDED</span> OpenWeatherMap Weather Maps tiles, current conditions. The wind layer shows speed as color only, with no direction arrows. These are not station observations.</li>
       <li><b>Not included:</b> official storm position and track, wind-signal areas, landfall alerts. No verified public PAGASA data feed is integrated.</li>
-      <li><b>Credits:</b> Himawari imagery &copy; JMA/Japan Meteorological Agency, distributed via NASA GIBS/EOSDIS; weather tiles &copy; OpenWeatherMap; street map &copy; OpenStreetMap contributors &copy; CARTO; satellite photo base &copy; Esri and its data providers.</li>
+      <li><b>Official satellite pages:</b> <a href="https://www.pagasa.dost.gov.ph/products-and-services/satellite" target="_blank" rel="noopener">PAGASA satellite</a> &middot; <a href="https://www.jma.go.jp/bosai/map.html#5/13/123/&amp;elem=ir&amp;contents=himawari" target="_blank" rel="noopener">JMA Himawari map</a> &middot; <a href="https://www.data.jma.go.jp/mscweb/data/himawari/" target="_blank" rel="noopener">JMA Himawari real-time images</a>. PAGASA does not offer a public tile feed we can embed, so these open in a new tab.</li>
+      <li><b>Credits:</b> Himawari imagery &copy; JMA/Japan Meteorological Agency (also distributed via NASA GIBS/EOSDIS); weather tiles &copy; OpenWeatherMap; street map &copy; OpenStreetMap contributors &copy; CARTO; satellite photo base &copy; Esri and its data providers.</li>
     </ul>
   </div>
 </template>
@@ -106,11 +107,9 @@
   const pad = (n) => String(n).padStart(2, "0");
   const iso = (d) => d.getUTCFullYear() + "-" + pad(d.getUTCMonth() + 1) + "-" + pad(d.getUTCDate()) + "T" + pad(d.getUTCHours()) + ":" + pad(d.getUTCMinutes()) + ":00Z";
 
-  const gibsPath = (ep, t) => "/wmts/epsg3857/" + ep + "/" + GIBS_LAYER + "/default/" + iso(t) + "/" + MATRIX;
-  const snap = (lagMin) => new Date(Math.floor((Date.now() - lagMin * 60000) / (STEP_MIN * 60000)) * STEP_MIN * 60000);
 
-  // Loads one tile that sits over the Philippines (z3 x6 y3) and checks it is a real picture, not a blank/missing tile.
-  function probeTile(ep, t) {
+  // Loads one image and checks it is a real picture (not a blank / missing tile).
+  function probeUrl(url) {
     return new Promise((resolve) => {
       const img = new Image(); img.crossOrigin = "anonymous";
       let to = null;
@@ -124,21 +123,55 @@
           const d = g.getImageData(0, 0, 32, 32).data; let lo = 255, hi = 0, vis = 0;
           for (let i = 0; i < d.length; i += 4) { if (d[i + 3] > 0) vis++; lo = Math.min(lo, d[i]); hi = Math.max(hi, d[i]); }
           done(vis > 20 && hi - lo > 8);
-        } catch (e) { done(img.naturalWidth > 0); }
+        } catch (e) { done(img.naturalWidth > 0); }   // tile loaded but pixels not readable (no CORS) -> trust the load
       };
-      img.src = "https://gibs.earthdata.nasa.gov" + gibsPath(ep, t) + "/3/3/6.jpg";
+      img.src = url;
     });
   }
-  // Newest time (and endpoint) that actually has imagery; null if GIBS has nothing recent or can't be reached.
-  async function findLatest() {
+  // Test tile over the Philippines: z3 / x6 / y3.
+
+  // ---- Source 1 (primary): JMA full-disk Himawari, band 13 infrared. The same Himawari-9 data PAGASA uses.
+  // Tile feed behind JMA's own web map (not a documented public API, so paths can change -> hence the probe + fallback).
+  const JMA_BASE = "https://www.jma.go.jp/bosai/himawari/data/satimg", JMA_BAND = "B13/TBB", JMA_NATIVE_ZOOM = 5;
+  const jmaStamp = (d) => d.getUTCFullYear() + pad(d.getUTCMonth() + 1) + pad(d.getUTCDate()) + pad(d.getUTCHours()) + pad(d.getUTCMinutes()) + "00";
+  const jmaDate = (s) => new Date(Date.UTC(+s.slice(0, 4), +s.slice(4, 6) - 1, +s.slice(6, 8), +s.slice(8, 10), +s.slice(10, 12)));
+  const jmaTile = (f, z, x, y) => JMA_BASE + "/" + f.base + "/fd/" + f.valid + "/" + JMA_BAND + "/" + z + "/" + x + "/" + y + ".jpg";
+  async function jmaSource() {
+    let frames = [];                                    // oldest -> newest, 10 min apart
+    try {
+      const r = await fetch(JMA_BASE + "/targetTimes_fd.json", { cache: "no-store" });
+      if (r.ok) frames = (await r.json()).filter((x) => x && x.basetime && x.validtime).map((x) => ({ base: x.basetime, valid: x.validtime })).sort((a, b) => a.valid < b.valid ? -1 : 1);
+    } catch (e) { /* list not readable from the browser -> fall back to guessing 10-minute stamps below */ }
+    if (!frames.length) {
+      for (let lag = 180; lag >= 20; lag -= 10) { const st = jmaStamp(new Date(Math.floor((Date.now() - lag * 60000) / 600000) * 600000)); frames.push({ base: st, valid: st }); }
+    }
+    // newest frame that really has imagery (the very newest is sometimes not published yet)
+    let anchor = -1;
+    for (let i = frames.length - 1; i >= Math.max(0, frames.length - 6); i--) { if (await probeUrl(jmaTile(frames[i], 3, 6, 3))) { anchor = i; break; } }
+    if (anchor < 0) return null;
+    const picked = [];                                  // every 3rd frame = 30 min steps, ending at the anchor
+    for (let i = anchor; i >= 0 && picked.length < FRAMES; i -= 3) picked.unshift(frames[i]);
+    return { name: "JMA Himawari-9", times: picked.map((f) => jmaDate(f.valid)), native: JMA_NATIVE_ZOOM,
+             url: (i) => JMA_BASE + "/" + picked[i].base + "/fd/" + picked[i].valid + "/" + JMA_BAND + "/{z}/{x}/{y}.jpg", subdomains: [] };
+  }
+
+  // ---- Source 2 (fallback): NASA GIBS copy of the same Himawari band. Listed under /nrt/ and /all/; probe which one works.
+  const gibsPath = (ep, t) => "/wmts/epsg3857/" + ep + "/" + GIBS_LAYER + "/default/" + iso(t) + "/" + MATRIX;
+  const snap = (lagMin) => new Date(Math.floor((Date.now() - lagMin * 60000) / (STEP_MIN * 60000)) * STEP_MIN * 60000);
+  async function gibsSource() {
     for (const lag of PROBE_LAGS_MIN) {
       const t = snap(lag);
-      const hits = await Promise.all(GIBS_ENDPOINTS.map((ep) => probeTile(ep, t).then((ok) => ok ? ep : null)));
+      const hits = await Promise.all(GIBS_ENDPOINTS.map((ep) => probeUrl("https://gibs.earthdata.nasa.gov" + gibsPath(ep, t) + "/3/3/6.jpg").then((ok) => ok ? ep : null)));
       const ep = hits.find(Boolean);
-      if (ep) return { ep, end: t };
+      if (ep) {
+        const times = Array.from({ length: FRAMES }, (_, i) => new Date(t.getTime() - (FRAMES - 1 - i) * STEP_MIN * 60000));
+        return { name: "NASA GIBS (Himawari)", times, native: MAX_NATIVE_ZOOM, subdomains: ["a", "b"],
+                 url: (i) => "https://gibs-{s}.earthdata.nasa.gov" + gibsPath(ep, times[i]) + "/{z}/{y}/{x}.jpg" };
+      }
     }
     return null;
   }
+
   const phTime = (d) => d.toLocaleString("en-PH", { timeZone: "Asia/Manila", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: false }) + " PHT · " + pad(d.getUTCHours()) + ":" + pad(d.getUTCMinutes()) + " UTC";
 
   function init() {
@@ -149,7 +182,7 @@
     street.addTo(map);
     L.marker([14.0863, 121.1497], { title: "Tanauan City (approximate center)" }).addTo(map).bindPopup("<b>Tanauan City, Batangas</b><br><small>Approximate city center for orientation only.</small>");
     L.control.scale({ imperial: false }).addTo(map);
-    map.attributionControl.addAttribution("Himawari imagery &copy; JMA via NASA GIBS; weather tiles &copy; OpenWeatherMap");
+    map.attributionControl.addAttribution("Himawari imagery &copy; JMA; weather tiles &copy; OpenWeatherMap");
 
     // --- model layers via server proxy (key stays server-side)
     const owm = (layer, opacity) => L.tileLayer("/api/owm-tile?layer=" + layer + "&z={z}&x={x}&y={y}", { opacity, maxNativeZoom: 8, maxZoom: 12, attribution: "" });
@@ -159,11 +192,11 @@
 
     // --- satellite animation: one tile layer per frame, preloaded, opacity-switched
     let times = [], layers = []; const errs = new Array(FRAMES).fill(0), loads = new Array(FRAMES).fill(0);
-    let idx = FRAMES - 1, timer = null, probing = true, noImagery = false;
+    let idx = FRAMES - 1, timer = null, probing = true, noImagery = false, srcName = "";
     const slider = $("tmSlider"); slider.max = FRAMES - 1; slider.value = idx;
     function status() {
       const bad = errs.reduce((a, b) => a + b, 0), ok = loads.reduce((a, b) => a + b, 0);
-      $("tmStatus").textContent = !$("tmSat").checked ? "Satellite loop is off." : probing ? "Finding the latest satellite frame…" : noImagery ? "NASA GIBS has no recent Himawari frames right now (or could not be reached). Try again in a few minutes, or use PAGASA and JMA satellite pages." : ok === 0 && bad > 0 ? "Satellite imagery could not be loaded (" + bad + " tile errors). It may be temporarily unavailable; use PAGASA and other official sources." : bad ? bad + " tile(s) failed to load; some frames may be incomplete." : ok ? "Loaded " + ok + " tiles across " + FRAMES + " frames." : "Loading satellite frames…";
+      $("tmStatus").textContent = !$("tmSat").checked ? "Satellite loop is off." : probing ? "Finding the latest satellite frame…" : noImagery ? "Could not load satellite imagery from JMA or NASA right now. Try again in a few minutes, or open the PAGASA / JMA satellite pages linked below." : ok === 0 && bad > 0 ? "Satellite imagery could not be loaded (" + bad + " tile errors). It may be temporarily unavailable; use PAGASA and other official sources." : bad ? bad + " tile(s) failed to load; some frames may be incomplete." : ok ? "Loaded " + ok + " tiles across " + times.length + " frames · source: " + srcName + "." : "Loading satellite frames…";
     }
     function show(i) {
       if (!times[i]) return;
@@ -179,17 +212,18 @@
     $("tmSat").addEventListener("change", (e) => setSat(e.target.checked));
     async function buildFrames() {
       status();
-      const found = await findLatest(); probing = false;
-      if (!found) { noImagery = true; $("tmFrameTime").textContent = "No satellite frames"; status(); return; }
-      times = Array.from({ length: FRAMES }, (_, i) => new Date(found.end.getTime() - (FRAMES - 1 - i) * STEP_MIN * 60000));
+      let src = null;
+      for (const make of [jmaSource, gibsSource]) { try { src = await make(); } catch (e) { console.warn("satellite source failed", e); } if (src) break; }
+      probing = false;
+      if (!src) { noImagery = true; $("tmFrameTime").textContent = "No satellite frames"; status(); return; }
+      srcName = src.name; times = src.times;
       layers = times.map((t, i) => {
-        const url = "https://gibs-{s}.earthdata.nasa.gov" + gibsPath(found.ep, t) + "/{z}/{y}/{x}.jpg";
-        const l = L.tileLayer(url, { subdomains: ["a", "b"], opacity: 0, maxNativeZoom: MAX_NATIVE_ZOOM, maxZoom: 12, updateWhenIdle: true, keepBuffer: 1, crossOrigin: true });
+        const l = L.tileLayer(src.url(i), { subdomains: src.subdomains, noWrap: true, opacity: 0, maxNativeZoom: src.native, maxZoom: 12, updateWhenIdle: true, keepBuffer: 1, crossOrigin: true });
         l.on("tileload", () => { loads[i]++; status(); });
-        l.on("tileerror", (e) => { errs[i]++; if (errs[i] === 1) console.warn("GIBS tile error", e.tile && e.tile.src); status(); });
+        l.on("tileerror", (e) => { errs[i]++; if (errs[i] === 1) console.warn("Satellite tile error", e.tile && e.tile.src); status(); });
         return l;
       });
-      idx = FRAMES - 1; slider.max = FRAMES - 1; slider.value = idx;
+      idx = times.length - 1; slider.max = times.length - 1; slider.value = idx;
       if ($("tmSat").checked) setSat(true);
     }
     buildFrames();
