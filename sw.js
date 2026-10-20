@@ -111,6 +111,8 @@ const NEVER_CACHE_PATTERNS = [
   /earthquake\.usgs\.gov/,            // USGS quake feed
   /volcview\.wr\.usgs\.gov/,          // PHIVOLCS-style volcano feed
   /openstreetmap\.org\/directions/,   // external directions link, not app content
+  /jma\.go\.jp\/bosai\/himawari/,    // JMA Himawari frame list + tiles: a cached list would hide new images
+  /earthdata\.nasa\.gov/,             // NASA GIBS satellite tiles (fallback source)
 ];
 
 function isNeverCache(url) {

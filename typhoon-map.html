@@ -196,7 +196,7 @@
     const slider = $("tmSlider"); slider.max = FRAMES - 1; slider.value = idx;
     function status() {
       const bad = errs.reduce((a, b) => a + b, 0), ok = loads.reduce((a, b) => a + b, 0);
-      $("tmStatus").textContent = !$("tmSat").checked ? "Satellite loop is off." : probing ? "Finding the latest satellite frame…" : noImagery ? "Could not load satellite imagery from JMA or NASA right now. Try again in a few minutes, or open the PAGASA / JMA satellite pages linked below." : ok === 0 && bad > 0 ? "Satellite imagery could not be loaded (" + bad + " tile errors). It may be temporarily unavailable; use PAGASA and other official sources." : bad ? bad + " tile(s) failed to load; some frames may be incomplete." : ok ? "Loaded " + ok + " tiles across " + times.length + " frames · source: " + srcName + "." : "Loading satellite frames…";
+      $("tmStatus").textContent = !$("tmSat").checked ? "Satellite loop is off." : probing ? "Finding the latest satellite frame…" : noImagery ? "Could not load satellite imagery from JMA or NASA right now. Try again in a few minutes, or open the PAGASA / JMA satellite pages linked below." : ok === 0 && bad > 0 ? "Satellite imagery could not be loaded (" + bad + " tile errors). It may be temporarily unavailable; use PAGASA and other official sources." : bad ? bad + " tile(s) failed to load; some frames may be incomplete." : ok ? "Loaded " + ok + " tiles across " + times.length + " frames · source: " + srcName + " · auto-refreshes every 10 min." : "Loading satellite frames…";
     }
     function show(i) {
       if (!times[i]) return;
@@ -210,23 +210,40 @@
     $("tmPlay").addEventListener("click", () => { if ($("tmSat").checked && layers.length) play(); });
     slider.addEventListener("input", () => { stop(); show(Number(slider.value)); });
     $("tmSat").addEventListener("change", (e) => setSat(e.target.checked));
-    async function buildFrames() {
-      status();
-      let src = null;
-      for (const make of [jmaSource, gibsSource]) { try { src = await make(); } catch (e) { console.warn("satellite source failed", e); } if (src) break; }
-      probing = false;
-      if (!src) { noImagery = true; $("tmFrameTime").textContent = "No satellite frames"; status(); return; }
-      srcName = src.name; times = src.times;
-      layers = times.map((t, i) => {
-        const l = L.tileLayer(src.url(i), { subdomains: src.subdomains, noWrap: true, opacity: 0, maxNativeZoom: src.native, maxZoom: 12, updateWhenIdle: true, keepBuffer: 1, crossOrigin: true });
-        l.on("tileload", () => { loads[i]++; status(); });
-        l.on("tileerror", (e) => { errs[i]++; if (errs[i] === 1) console.warn("Satellite tile error", e.tile && e.tile.src); status(); });
-        return l;
-      });
-      idx = times.length - 1; slider.max = times.length - 1; slider.value = idx;
-      if ($("tmSat").checked) setSat(true);
+    let busy = false, lastCheck = Date.now();
+    // refresh=false: first load. refresh=true: quiet re-check; swaps in new frames only if a newer image exists.
+    async function buildFrames(refresh) {
+      if (busy) return; busy = true;
+      try {
+        if (!refresh) status();
+        let src = null;
+        for (const make of [jmaSource, gibsSource]) { try { src = await make(); } catch (e) { console.warn("satellite source failed", e); } if (src) break; }
+        lastCheck = Date.now();
+        if (!src) {
+          if (refresh && layers.length) return;                       // keep showing the frames we already have
+          probing = false; noImagery = true; $("tmFrameTime").textContent = "No satellite frames"; status(); return;
+        }
+        if (refresh && times.length && src.times[src.times.length - 1].getTime() === times[times.length - 1].getTime()) { status(); return; } // nothing newer yet
+        const wasPlaying = !!timer; if (wasPlaying) stop();
+        layers.forEach((l) => map.removeLayer(l));
+        errs.fill(0); loads.fill(0);
+        probing = false; noImagery = false; srcName = src.name; times = src.times;
+        layers = times.map((t, i) => {
+          const l = L.tileLayer(src.url(i), { subdomains: src.subdomains, noWrap: true, opacity: 0, maxNativeZoom: src.native, maxZoom: 12, updateWhenIdle: true, keepBuffer: 1, crossOrigin: true });
+          l.on("tileload", () => { loads[i]++; status(); });
+          l.on("tileerror", (e) => { errs[i]++; if (errs[i] === 1) console.warn("Satellite tile error", e.tile && e.tile.src); status(); });
+          return l;
+        });
+        idx = times.length - 1; slider.max = times.length - 1; slider.value = idx;
+        if ($("tmSat").checked) { setSat(true); if (wasPlaying) play(); }
+      } finally { busy = false; }
     }
-    buildFrames();
+    buildFrames(false);
+    // Himawari publishes a new image every 10 minutes: re-check on that cadence, and when the tab comes back to the foreground.
+    const REFRESH_MS = 10 * 60000;
+    const refreshTimer = setInterval(() => { if (!document.hidden && $("tmSat").checked) buildFrames(true); }, REFRESH_MS);
+    document.addEventListener("visibilitychange", () => { if (!document.hidden && $("tmSat").checked && Date.now() - lastCheck > REFRESH_MS) buildFrames(true); });
+    window.addEventListener("pagehide", () => clearInterval(refreshTimer));
     map.on("zoomend moveend", () => { layers.forEach((l, k) => { if (k !== idx && map.hasLayer(l)) l.setOpacity(0); }); });
     window.addEventListener("pagehide", stop);
     setTimeout(() => map.invalidateSize(), 200);
