@@ -19,12 +19,28 @@
 <template id="aq-content">
   <div class="mb-4"><span class="eyebrow">Air quality</span>
     <h1 style="font-family:var(--font-display);font-weight:700;font-size:1.4rem;color:var(--canvas-heading);margin:.25rem 0 0;">Air Quality — <span id="aqPlace">Tanauan City</span> area</h1>
-    <button id="aqLocBtn" class="btn-rain btn-rain-ghost btn-rain-sm mt-2" type="button" title="Uses your device location once, rounded to about 100 m; nothing is saved"><i class="bi bi-geo-alt"></i> <span>Use my location</span></button></div>
+    <button id="aqLocBtn" class="btn-rain btn-rain-ghost btn-rain-sm mt-2" type="button" title="Uses your device location once, rounded to about 100 m; nothing is saved"><i class="bi bi-geo-alt"></i> <span>Use my location</span></button>
+    <div id="aqWx" class="mt-2" style="font-size:.85rem;color:var(--canvas-body);" hidden></div>
+    <div class="position-relative mt-2" style="max-width:440px;">
+      <div class="d-flex gap-2">
+        <input id="aqSearch" class="form-control form-control-sm" type="text" placeholder="Search city" autocomplete="off" aria-label="Search city">
+        <button id="aqSearchBtn" class="btn-rain btn-rain-primary btn-rain-sm" type="button">Search</button>
+      </div>
+      <ul id="aqSug" class="list-group position-absolute w-100 shadow" style="z-index:30;max-height:240px;overflow:auto;" hidden></ul>
+      <div id="aqSearchMsg" class="text-muted mt-1" style="font-size:.78rem;" role="status"></div>
+    </div></div>
   <div id="aqError" class="error-state d-none"><div><strong>Unable to retrieve air-quality data.</strong><div class="text-muted mt-1" style="font-size:.85rem;">The provider may be unreachable or the server key is not set. No values are shown rather than guessed ones.</div></div>
     <button class="btn-rain btn-rain-ghost btn-rain-sm mt-3" id="aqRetry">Retry</button></div>
   <div id="aqLoading" class="rain-card"><span class="skeleton d-block" style="height:140px;"></span></div>
   <div id="aqBody" class="d-none">
     <div id="aqStale" class="rain-card mb-3 d-none" style="border-left:4px solid #b45309;font-size:.85rem;"></div>
+    <div class="rain-card mb-4">
+      <div class="card-eyebrow"><span>Pollutant levels right now — US EPA AQI scale (0–500)</span><span class="demo-data-tag" style="background:#b45309">CALCULATED ESTIMATE</span></div>
+      <div class="d-flex align-items-baseline flex-wrap gap-2 mb-2"><span style="font-size:2rem;font-weight:700;" id="aqOverall">—</span><span id="aqOverallBadge"></span><span class="text-muted" id="aqOverallMain" style="font-size:.85rem;"></span></div>
+      <div class="aq-grid" id="aqEpaCards"></div>
+      <div class="aq-legend mt-3"><b>LEGEND:</b> <span class="aq-chip" data-l="0">Good</span><span class="aq-chip" data-l="1">Moderate</span><span class="aq-chip" data-l="2">Unhealthy (S.G)</span><span class="aq-chip" data-l="3">Unhealthy</span><span class="aq-chip" data-l="4">Very Unhealthy</span><span class="aq-chip" data-l="5">Hazardous</span></div>
+      <div class="text-muted mt-2" style="font-size:.78rem;" id="aqIssued"></div>
+    </div>
     <div class="rain-card mb-4">
       <div class="card-eyebrow"><span>Current reading (grid cell at the queried point)</span><span class="demo-data-tag" style="background:#b45309">MODELED / SATELLITE-BASED, NOT A GROUND STATION</span></div>
       <div style="font-size:1.6rem;font-weight:700;" id="aqIdx">—</div>
@@ -43,6 +59,10 @@
       <div class="card-eyebrow"><span>Next 24 hours — PM2.5 and index</span><span class="demo-data-tag" style="background:#b45309">FORECAST</span></div>
       <div id="aqFc" style="font-size:.85rem;"></div>
     </div>
+    <div class="rain-card mb-4">
+      <div class="card-eyebrow"><span>Air quality outlook — worst hour of each day <span id="aqDailyCity"></span></span><span class="demo-data-tag" style="background:#b45309">FORECAST</span></div>
+      <div class="aq-grid" id="aqDaily"></div>
+    </div>
     <div class="rain-card mb-4" style="font-size:.85rem;">
       <b>General precautions</b> (summarized from WHO and DOH public guidance — not a medical diagnosis):
       <ul class="mb-0 mt-2">
@@ -54,8 +74,9 @@
     </div>
     <div class="rain-card" style="font-size:.8rem;">
       <b>Source &amp; limitations.</b> Data: OpenWeatherMap Air Pollution API (atmospheric-composition model blended with satellite and other inputs), requested through this app's server.
-      Values describe a grid cell, not a ground monitor in Tanauan, and may differ from DENR-EMB station readings. The "index" is OpenWeatherMap's own 1–5 scale
-      (Good, Fair, Moderate, Poor, Very Poor), <b>not</b> the Philippine or US AQI. SO<sub>2</sub> and NO<sub>2</sub> here are surface concentrations from the model, not satellite
+      Values describe a grid cell, not a ground monitor in Tanauan, and may differ from DENR-EMB station readings. The headline "index" is OpenWeatherMap's own 1–5 scale
+      (Good, Fair, Moderate, Poor, Very Poor), <b>not</b> the Philippine or US AQI. The 0–500 pollutant scores are this app's own calculation using US EPA breakpoints on the modeled concentrations
+      (a single reading, not the 24-hour averages official AQI uses), so treat them as estimates. SO<sub>2</sub> and NO<sub>2</sub> here are surface concentrations from the model, not satellite
       column amounts and not direct Taal gas-flux measurements. No official DENR-EMB feed is integrated because no verified public API was found.
       Official air-quality information: <a href="https://air.emb.gov.ph" target="_blank" rel="noopener">air.emb.gov.ph</a>.
     </div>
@@ -75,7 +96,7 @@
   await RainAuth.init();
   const user = renderAppShell("air-quality.html", { title: "Air Quality" });
   const HOME = [14.0863, 121.1497]; // approximate Tanauan City center (data lookup point only, not a facility)
-  let LAT = HOME[0], LNG = HOME[1];
+  let LAT = HOME[0], LNG = HOME[1], PLACE = "Tanauan City", TZ = 28800, placeToken = 0;
   const $ = (id) => document.getElementById(id);
   const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const IDX = { 1: "Good", 2: "Fair", 3: "Moderate", 4: "Poor", 5: "Very Poor" };
@@ -83,6 +104,79 @@
   const fmtT = (u) => new Date(u * 1000).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
   const get = (q) => fetch("/api/weather?lat=" + LAT + "&lng=" + LNG + "&" + q).then((r) => { if (!r.ok) throw new Error(r.status); return r.json(); });
   const valid = (d) => d && Array.isArray(d.list);
+
+  /* ---- US EPA AQI (0–500), computed per pollutant from OpenWeatherMap concentrations (µg/m³) ----
+     Gases are converted to ppb/ppm (25 °C, 1 atm) first; overall AQI = highest pollutant sub-index. */
+  const AQI_RANGES = [[0, 50], [51, 100], [101, 150], [151, 200], [201, 300], [301, 500]];
+  const BP = {
+    pm25: [[0, 9.0], [9.1, 35.4], [35.5, 55.4], [55.5, 125.4], [125.5, 225.4], [225.5, 325.4]],
+    pm10: [[0, 54], [55, 154], [155, 254], [255, 354], [355, 424], [425, 604]],
+    o3: [[0, 54], [55, 70], [71, 85], [86, 105], [106, 200], [201, 404]],
+    co: [[0, 4.4], [4.5, 9.4], [9.5, 12.4], [12.5, 15.4], [15.5, 30.4], [30.5, 50.4]],
+    no2: [[0, 53], [54, 100], [101, 360], [361, 649], [650, 1249], [1250, 2049]],
+    so2: [[0, 35], [36, 75], [76, 185], [186, 304], [305, 604], [605, 1004]],
+  };
+  const toPpb = (ug, mw) => ug * 24.45 / mw;
+  function subIndex(key, c) {
+    const t = BP[key];
+    for (let i = 0; i < t.length; i++) {
+      const [lo, hi] = t[i];
+      if (c <= hi) { const cc = Math.max(c, lo), [ilo, ihi] = AQI_RANGES[i]; return Math.round(((ihi - ilo) / (hi - lo)) * (cc - lo) + ilo); }
+    }
+    return 500;
+  }
+  const levelOf = (a) => a <= 50 ? 0 : a <= 100 ? 1 : a <= 150 ? 2 : a <= 200 ? 3 : a <= 300 ? 4 : 5;
+  const LEVELS = ["Good", "Moderate", "Unhealthy (S.G)", "Unhealthy", "Very Unhealthy", "Hazardous"];
+  const EPA = [
+    { label: "OZONE", comp: "o3", calc: (c) => subIndex("o3", toPpb(c, 48.00)) },
+    { label: "CO", comp: "co", calc: (c) => subIndex("co", toPpb(c, 28.01) / 1000) },
+    { label: "NO\u2082", comp: "no2", calc: (c) => subIndex("no2", toPpb(c, 46.01)) },
+    { label: "PM2.5", comp: "pm2_5", calc: (c) => subIndex("pm25", c) },
+    { label: "PM10", comp: "pm10", calc: (c) => subIndex("pm10", c) },
+    { label: "SO\u2082", comp: "so2", calc: (c) => subIndex("so2", toPpb(c, 64.06)) },
+  ];
+  const badge = (l) => `<span class="aq-badge" data-l="${l}">${LEVELS[l]}</span>`;
+  const subOf = (p, comps) => (typeof comps[p.comp] === "number" ? p.calc(comps[p.comp]) : null);
+
+  function renderEpa(entry) {
+    const comps = entry.components;
+    $("aqEpaCards").innerHTML = EPA.map((p) => {
+      const v = subOf(p, comps), l = v === null ? null : levelOf(v);
+      return `<div class="aq-tile"><div class="card-eyebrow">${p.label}</div><div class="aq-num">${v === null ? "--" : v}</div>${l === null ? '<span class="aq-badge">No data</span>' : badge(l)}<div class="aq-conc">${typeof comps[p.comp] === "number" ? comps[p.comp].toFixed(1) + " µg/m³" : "&nbsp;"}</div></div>`;
+    }).join("");
+    let top = { v: -1, label: "" };
+    EPA.forEach((p) => { const v = subOf(p, comps); if (v !== null && v > top.v) top = { v, label: p.label }; });
+    $("aqOverall").textContent = top.v >= 0 ? top.v : "—";
+    $("aqOverallBadge").innerHTML = top.v >= 0 ? badge(levelOf(top.v)) : "";
+    $("aqOverallMain").textContent = top.v >= 0 ? "overall (highest pollutant: " + top.label + ")" : "";
+    $("aqIssued").textContent = PLACE + " air quality report (issued " + new Date(entry.dt * 1000).toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" }) + ")";
+  }
+
+  // Daily outlook: the day's worst hour decides the AQI and names the pollutant driving it (up to ~5 days).
+  function renderDaily(fc, tz) {
+    const days = new Map();
+    fc.list.forEach((e) => {
+      const k = new Date((e.dt + tz) * 1000).toISOString().slice(0, 10);
+      if (!days.has(k)) days.set(k, { key: k, aqi: -1, main: "" });
+      const d = days.get(k);
+      EPA.forEach((p) => { const v = subOf(p, e.components || {}); if (v !== null && v > d.aqi) { d.aqi = v; d.main = p.label; } });
+    });
+    const list = [...days.values()].filter((d) => d.aqi >= 0).slice(0, 5);
+    $("aqDailyCity").textContent = "· " + PLACE;
+    $("aqDaily").innerHTML = list.map((d, i) => {
+      const dt = new Date(d.key + "T00:00:00Z"), l = levelOf(d.aqi);
+      const day = i === 0 ? "Today" : dt.toLocaleDateString("en-US", { weekday: "short", timeZone: "UTC" });
+      return `<div class="aq-tile"><div class="card-eyebrow">${day} · ${dt.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" })}</div><div class="aq-num">${d.aqi}</div>${badge(l)}<div class="aq-conc">Main pollutant: ${esc(d.main)}</div></div>`;
+    }).join("") || "<div class='text-muted'>Daily outlook unavailable.</div>";
+  }
+
+  function renderWx(w) {
+    const el = $("aqWx");
+    if (!w || !w.main || typeof w.main.temp !== "number") { el.hidden = true; return; }
+    const desc = (w.weather && w.weather[0] && w.weather[0].description) || "";
+    el.textContent = Math.round(w.main.temp) + "°C · " + (desc.charAt(0).toUpperCase() + desc.slice(1)) + " · Humidity " + w.main.humidity + "% · Wind " + (w.wind && typeof w.wind.speed === "number" ? w.wind.speed + " m/s" : "n/a");
+    el.hidden = false;
+  }
 
   function chart(points) {
     if (!points.length) return "<div class='text-muted'>No history returned.</div>";
@@ -101,9 +195,15 @@
     $("aqError").classList.add("d-none"); $("aqLoading").classList.remove("d-none"); $("aqBody").classList.add("d-none");
     try {
       const now = Math.floor(Date.now() / 1000);
-      const [cur, fc, hist] = await Promise.all([get("air=current"), get("air=forecast"), get("air=history&start=" + (now - 48 * 3600) + "&end=" + now).catch(() => null)]);
+      const token = ++placeToken;
+      const [cur, fc, hist, wx] = await Promise.all([get("air=current"), get("air=forecast"), get("air=history&start=" + (now - 48 * 3600) + "&end=" + now).catch(() => null), get("").catch(() => null)]);
+      if (token !== placeToken) return;   // a newer place was chosen while this one was loading
+      if (wx && typeof wx.timezone === "number") TZ = wx.timezone;
+      renderWx(wx);
       if (!valid(cur) || !cur.list.length || !cur.list[0].components) throw new Error("bad current payload");
       const c = cur.list[0], comp = c.components;
+      renderEpa(c);
+      if (valid(fc) && fc.list.length) renderDaily(fc, TZ); else $("aqDaily").innerHTML = "<div class='text-muted'>Daily outlook unavailable.</div>";
       $("aqIdx").textContent = IDX[c.main && c.main.aqi] ? "OpenWeatherMap index " + c.main.aqi + " of 5 — " + IDX[c.main.aqi] : "Index not provided";
       $("aqTime").textContent = fmtT(c.dt);
       $("aqLoc").textContent = LAT.toFixed(3) + ", " + LNG.toFixed(3);
@@ -121,15 +221,68 @@
       $("aqLoading").classList.add("d-none"); $("aqBody").classList.remove("d-none");
     } catch (e) { console.warn("air quality", e); $("aqLoading").classList.add("d-none"); $("aqError").classList.remove("d-none"); }
   }
+  // ---- Place selection (shared by "Use my location", "Back to Tanauan City" and city search) ----
+  function goTo(name, la, lo) {
+    LAT = la; LNG = lo; PLACE = name; $("aqPlace").textContent = name;
+    const atHome = Math.abs(la - HOME[0]) < 1e-6 && Math.abs(lo - HOME[1]) < 1e-6;
+    $("aqLocBtn").querySelector("span").textContent = atHome ? "Use my location" : "Back to Tanauan City";
+    load();
+  }
+
+  // ---- City search (OpenWeatherMap geocoding through this app's server) ----
+  const geocode = (q) => fetch("/api/weather?geocode=" + encodeURIComponent(q)).then((r) => { if (!r.ok) throw new Error(r.status); return r.json(); });
+  const placeLabel = (r) => [r.name, r.state, r.country].filter(Boolean).join(", ");
+  let typeTimer = null, sugId = 0;
+  const hideSug = () => { $("aqSug").hidden = true; };
+  function fillSug(results, heading) {
+    const ul = $("aqSug"); ul.innerHTML = "";
+    if (heading) { const h = document.createElement("li"); h.className = "list-group-item small text-muted"; h.textContent = heading; ul.appendChild(h); }
+    results.forEach((r) => {
+      const li = document.createElement("li"); li.className = "list-group-item list-group-item-action"; li.style.cursor = "pointer"; li.tabIndex = 0; li.textContent = placeLabel(r);
+      const pick = () => { hideSug(); $("aqSearch").value = r.name; $("aqSearchMsg").textContent = ""; goTo(r.name, r.lat, r.lon); };
+      li.addEventListener("click", pick); li.addEventListener("keydown", (e) => { if (e.key === "Enter") pick(); });
+      ul.appendChild(li);
+    });
+    ul.hidden = !ul.children.length;
+  }
+  async function suggest() {
+    const q = $("aqSearch").value.trim();
+    if (q.length < 2) { hideSug(); return; }
+    const id = ++sugId;
+    try {
+      const found = await geocode(q);
+      if (id !== sugId) return;               // a newer keystroke replaced this request
+      const seen = new Set(), uniq = (Array.isArray(found) ? found : []).filter((r) => { const k = placeLabel(r); if (seen.has(k)) return false; seen.add(k); return true; });
+      if (!uniq.length) { $("aqSug").innerHTML = '<li class="list-group-item small text-muted">No matching city</li>'; $("aqSug").hidden = false; return; }
+      fillSug(uniq);
+    } catch (e) { /* stay quiet while typing; pressing Search shows errors */ }
+  }
+  async function runSearch() {
+    const q = $("aqSearch").value.trim(); if (!q) return;
+    clearTimeout(typeTimer); sugId++; hideSug();
+    $("aqSearchMsg").textContent = "Searching…";
+    try {
+      const found = await geocode(q);
+      if (!Array.isArray(found) || !found.length) { $("aqSearchMsg").textContent = "No matching city found. Try the city name only, e.g. \"Manila\"."; return; }
+      $("aqSearchMsg").textContent = "";
+      goTo(found[0].name, found[0].lat, found[0].lon);      // best match loads right away
+      if (found.length > 1) fillSug(found.slice(1), "Other matches:");
+    } catch (e) { console.warn("city search", e); $("aqSearchMsg").textContent = "City search is unavailable right now. Try again in a moment."; }
+  }
+
   if (user) { $("app-content").appendChild($("aq-content").content.cloneNode(true)); $("aqRetry").addEventListener("click", load); load();
+    $("aqSearch").addEventListener("input", () => { clearTimeout(typeTimer); typeTimer = setTimeout(suggest, 250); });
+    $("aqSearch").addEventListener("keydown", (e) => { if (e.key === "Enter") runSearch(); if (e.key === "Escape") hideSug(); });
+    $("aqSearchBtn").addEventListener("click", runSearch);
+    document.addEventListener("click", (e) => { if (!e.target.closest("#aqSearch, #aqSug, #aqSearchBtn")) hideSug(); });
     $("aqLocBtn").addEventListener("click", () => {
       const lab = $("aqLocBtn").querySelector("span");
-      if (LAT !== HOME[0] || LNG !== HOME[1]) { LAT = HOME[0]; LNG = HOME[1]; lab.textContent = "Use my location"; $("aqPlace").textContent = "Tanauan City"; load(); return; }
+      if (LAT !== HOME[0] || LNG !== HOME[1]) { goTo("Tanauan City", HOME[0], HOME[1]); return; }
       if (!navigator.geolocation) { lab.textContent = "Location not supported"; return; }
       navigator.geolocation.getCurrentPosition((p) => {
         const la = +p.coords.latitude.toFixed(3), lo = +p.coords.longitude.toFixed(3); // rounded to ~100 m, never stored
         if (!(la >= 4 && la <= 21.5 && lo >= 116 && lo <= 127.5)) { lab.textContent = "Outside the Philippines"; return; }
-        LAT = la; LNG = lo; lab.textContent = "Back to Tanauan City"; $("aqPlace").textContent = "your location (approx.)"; load();
+        goTo("your location (approx.)", la, lo);
       }, () => { lab.textContent = "Location blocked"; }, { timeout: 8000 });
     });
   }

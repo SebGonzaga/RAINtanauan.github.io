@@ -27,13 +27,21 @@
   </div>
   <div class="row g-3 mb-4">
     <div class="col-lg-8"><div class="rain-card p-2"><div id="flMap" style="height:540px;min-height:360px;border-radius:8px;"></div></div></div>
-    <div class="col-lg-4"><div class="rain-card" id="flLayers" style="font-size:.82rem;"></div></div>
+    <div class="col-lg-4">
+      <div class="rain-card mb-3" style="font-size:.82rem;">
+        <b>Check a location</b>
+        <p class="mb-2 mt-1 text-muted">Click the map, or use your device location, to ask MGB what susceptibility is mapped at that point.</p>
+        <button type="button" class="btn-rain btn-rain-ghost btn-rain-sm" id="flLocBtn"><i class="bi bi-crosshair"></i> <span>Use my location</span></button>
+        <div id="flPin" class="mt-2">No point selected yet.</div>
+      </div>
+      <div class="rain-card" id="flLayers" style="font-size:.82rem;"></div>
+    </div>
   </div>
   <div class="rain-card mb-4" style="font-size:.82rem;"><b>Layers not available yet</b>
     <ul class="mb-0 mt-2" id="flMissing"></ul></div>
   <div class="rain-card" style="font-size:.78rem;"><b>Sources &amp; limitations.</b> Flood and landslide susceptibility are served live by the
     Philippine Geoportal / UlAP hazards server (<code>ulap-hazards.georisk.gov.ph</code>) from Mines and Geosciences Bureau (MGB) data. Check the service pages for scale, licensing and
-    update status before relying on them. The layers are drawn as image overlays and cannot be queried by clicking. If a layer fails to load, the status line under its toggle says so.
+    update status before relying on them. The raster layers are image overlays; the <b>Check a location</b> card and the optional vector zones layer ask the same MGB services for the class mapped at a point or in the Tanauan area. If a layer fails to load, the status line under its toggle says so.
     This page is inspired by Project NOAH's hazard-mapping approach but does <b>not</b> use NOAH data. Basemaps: &copy; OpenStreetMap contributors; satellite &copy; Esri, Maxar, Earthstar Geographics.</div>
 </template>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
@@ -104,6 +112,94 @@
     layers[d.key] = arcgisLayer(d.url, (ok, bad) => setSt(d.key, bad > 4 && ok === 0 ? "Failed to load from the source server" : ok ? "Loaded (tiles drawn: " + ok + (bad ? ", failed: " + bad : "") + ")" : "Loading…"));
     if (d.on) layers[d.key].addTo(map);
   });
+  // ---- MGB vector zones (live, by class): polygons fetched from the MGB services and shaded by susceptibility class ----
+  const VEC = { key: "vec", label: "MGB vector zones (live, by class)", kind: "HAZARD SUSCEPTIBILITY · POLYGONS", on: false,
+    info: "The same MGB flood and rain-induced landslide data as polygons, shaded by class (blue = flood, yellow→red = landslide; darker = higher). Click a zone for its class. Simplified for speed, so edges are approximate." };
+  const ringArea = (r) => r.reduce((a, p, i) => { const n = r[(i + 1) % r.length]; return a + (n[0] - p[0]) * (n[1] + p[1]); }, 0);
+  const classOf = (a) => {   // pick the attribute(s) that name the class, as MGB returned them
+    if (!a) return "None mapped (outside susceptible zones)";
+    const keys = Object.keys(a).filter((k) => /susc|haz|class|level|rating|^f?hazard|^lh|^fh|^gridcode|^descript/i.test(k) && a[k] != null && a[k] !== "");
+    return (keys.length ? keys : Object.keys(a).filter((k) => typeof a[k] === "string")).slice(0, 2).map((k) => a[k]).join(" · ") || "Mapped (class not stated)";
+  };
+  const shade = (k, label) => {
+    const F = { very: "#1e3a8a", high: "#2563eb", mod: "#60a5fa", low: "#bfdbfe" }, S = { very: "#7f1d1d", high: "#dc2626", mod: "#f97316", low: "#fde047" };
+    const P = k === "flood" ? F : S, t = String(label).toLowerCase();
+    return /very/.test(t) ? P.very : /high|\bh\b|^3$|debris|accum/.test(t) ? P.high : /mod|\bm\b|^2$/.test(t) ? P.mod : P.low;
+  };
+  function jsonp(url) {      // fallback when the browser blocks a direct request (the server answers JSONP)
+    return new Promise((res, rej) => {
+      const cb = "cb" + Math.random().toString(36).slice(2), el = document.createElement("script");
+      const done = () => { clearTimeout(t); delete window[cb]; el.remove(); };
+      const t = setTimeout(() => { done(); rej(new Error("timeout")); }, 20000);
+      window[cb] = (d) => { done(); res(d); }; el.onerror = () => { done(); rej(new Error("load")); };
+      el.src = url + "&callback=" + cb; document.head.appendChild(el);
+    });
+  }
+  const arc = async (url) => { try { const r = await fetch(url); return await r.json(); } catch (e) { return jsonp(url); } };
+  function toGeo(j, k) {
+    const out = [];
+    (j.features || []).forEach((f) => {
+      const rings = (f.geometry && f.geometry.rings) || [], polys = [];
+      rings.forEach((r) => { if (ringArea(r) > 0) polys.push([r]); else if (polys.length) polys[polys.length - 1].push(r); }); // outer rings clockwise, holes counter-clockwise
+      if (!polys.length) return;
+      const lab = classOf(f.attributes);
+      out.push({ type: "Feature", properties: { k, label: lab, color: shade(k, lab) }, geometry: { type: "MultiPolygon", coordinates: polys } });
+    });
+    return out;
+  }
+  $("flList").insertAdjacentHTML("beforeend", row(VEC));
+  let vecLoaded = false;
+  layers.vec = L.geoJSON(null, {
+    style: (f) => ({ color: f.properties.color, weight: 1, fillColor: f.properties.color, fillOpacity: 0.45 }),
+    onEachFeature: (f, l) => l.bindPopup(`<b>${f.properties.k === "flood" ? "Flood" : "Rain-induced landslide"} susceptibility</b><br>${esc(f.properties.label)}<br><small>MGB data, simplified polygon.</small>`),
+  });
+  async function loadVec() {
+    if (vecLoaded) return; vecLoaded = true; setSt("vec", "Loading polygons…");
+    const env = "121.04,14.00,121.25,14.17"; let ok = 0; const feats = [];
+    for (const [k, svc] of [["flood", LAYERS[0].url], ["slide", LAYERS[1].url]]) {
+      try {
+        const j = await arc(`${svc}/0/query?where=1%3D1&geometry=${env}&geometryType=esriGeometryEnvelope&inSR=4326&outSR=4326&spatialRel=esriSpatialRelIntersects&outFields=*&returnGeometry=true&maxAllowableOffset=0.0003&resultRecordCount=2000&f=json`);
+        if (j.error) throw new Error(j.error.message);
+        feats.push(...toGeo(j, k)); ok++;
+      } catch (e) { console.warn("vector load failed", k, e); }
+    }
+    layers.vec.addData({ type: "FeatureCollection", features: feats });
+    if (!ok) vecLoaded = false;   // allow another try next time the toggle is switched on
+    setSt("vec", ok ? feats.length + " polygons loaded in the Tanauan area" + (ok < 2 ? " (one service did not respond)" : "") : "Vector polygons could not be loaded (service unreachable)");
+  }
+
+  // ---- Check a location: click the map or use the device location ----
+  const SVCS = [["Flood", "Flood susceptibility (MGB 2018)"], ["RainInducedLandslide", "Landslide susceptibility (MGB 2012)"]];
+  let pin = null, qTok = 0;
+  async function checkPoint(lat, lng, extra) {
+    const tok = ++qTok;
+    if (!(lat >= 4 && lat <= 21.5 && lng >= 116 && lng <= 127.5)) { $("flPin").textContent = "That point is outside the Philippines, where MGB hazard data applies."; return; }
+    if (!pin) pin = L.marker([lat, lng]).addTo(map); else pin.setLatLng([lat, lng]);
+    $("flPin").textContent = "Checking MGB…";
+    const parts = await Promise.all(SVCS.map(async ([svc, label]) => {
+      try {
+        const r = await fetch(`/api/hazard-point?service=${svc}&lat=${lat}&lng=${lng}`);
+        if (!r.ok) throw new Error(r.status);
+        const j = await r.json();
+        if (!j.count) return `<div class="mb-2"><b>${esc(label)}</b><br>No mapped class returned here. That can mean low/no susceptibility <i>or</i> no coverage; the source does not say which.</div>`;
+        const kv = Object.entries(j.attributes || {}), head = kv.find(([k]) => /susc|class|hazard|level|rating/i.test(k));
+        return `<div class="mb-2"><b>${esc(label)}</b><br>${head ? "<span style='font-size:1rem;font-weight:700'>" + esc(head[1]) + "</span><br>" : ""}<small class="text-muted">As returned by MGB: ${kv.map(([k, v]) => esc(k) + " = " + esc(v)).join("; ") || "(no attributes)"}</small></div>`;
+      } catch (e) { return `<div class="mb-2"><b>${esc(label)}</b><br>Could not be checked right now.</div>`; }
+    }));
+    if (tok !== qTok) return;      // a newer click replaced this lookup
+    $("flPin").innerHTML = parts.join("") + `<small class="text-muted">General susceptibility, not current conditions. ${lat.toFixed(5)}, ${lng.toFixed(5)}${extra || ""}</small>`;
+  }
+  map.on("click", (e) => checkPoint(+e.latlng.lat.toFixed(5), +e.latlng.lng.toFixed(5)));
+  $("flLocBtn").addEventListener("click", () => {
+    if (!navigator.geolocation) { $("flPin").textContent = "Location is not supported on this device."; return; }
+    $("flPin").textContent = "Finding your location…";
+    navigator.geolocation.getCurrentPosition((p) => {
+      const la = +p.coords.latitude.toFixed(5), lo = +p.coords.longitude.toFixed(5);
+      map.setView([la, lo], Math.max(map.getZoom(), 14));
+      checkPoint(la, lo, " · your location (±" + Math.round(p.coords.accuracy) + " m)");
+    }, (err) => { $("flPin").textContent = err.code === 1 ? "Location permission denied. Allow location access in your browser and try again." : "Could not get your location. Try again outdoors or with Wi-Fi on."; }, { enableHighAccuracy: true, timeout: 10000 });
+  });
+
   layers.reports = L.layerGroup();
   async function loadReports() {
     try {
@@ -113,7 +209,7 @@
       if (error) throw error;
       (data || []).forEach((r) => {
         if (!(r.lat >= 4 && r.lat <= 21.5 && r.lng >= 116 && r.lng <= 127.5)) return;
-        L.circleMarker([r.lat, r.lng], { radius: 8, color: "#fff", weight: 2, fillColor: r.category === "Flooding" ? "#2563eb" : "#92400e", fillOpacity: 0.95 })
+        L.circleMarker([r.lat, r.lng], { radius: 8, color: "#fff", weight: 2, fillColor: r.category === "Flooding" ? "#2563eb" : "#92400e", fillOpacity: 0.95, bubblingMouseEvents: false })
           .bindPopup(`<b>${esc(r.category)}</b> · ${r.status === "pending" ? "Unverified report" : "Reviewed by admin"}<br>${esc(r.area)}<br><small>${esc(new Date(r.created_at).toLocaleString())}</small><br>${esc((r.description || "").slice(0, 200))}`)
           .addTo(layers.reports);
       });
@@ -125,6 +221,7 @@
   panel.addEventListener("change", (e) => {
     const k = e.target.dataset && e.target.dataset.k; if (!k) return;
     e.target.checked ? layers[k].addTo(map) : map.removeLayer(layers[k]);
+    if (k === "vec" && e.target.checked) loadVec();
   });
   $("flOp").addEventListener("input", (e) => LAYERS.forEach((d) => { const v = e.target.value / 100; layers[d.key].options.opacity = v; layers[d.key].getContainer() && (layers[d.key].getContainer().style.opacity = v); }));
 </script>

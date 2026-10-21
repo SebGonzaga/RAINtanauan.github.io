@@ -7,6 +7,7 @@
 //   /api/weather?lat=14.21&lng=121.16              -> current conditions
 //   /api/weather?lat=14.21&lng=121.16&forecast=1   -> 5-day forecast
 //   /api/weather?geocode=Calamba                   -> city search
+//   /api/weather?reverse=1&lat=..&lng=..           -> place name for a GPS point
 //   /api/weather?lat=..&lng=..&air=current         -> air pollution, current (OpenWeatherMap Air Pollution API)
 //   /api/weather?lat=..&lng=..&air=forecast        -> air pollution, hourly forecast (~4 days)
 //   /api/weather?lat=..&lng=..&air=history&start=<unix>&end=<unix> -> air pollution history (max 7 days here)
@@ -19,7 +20,7 @@ export default async function handler(req, res) {
   }
   if (limited(req, res, 'weather', 90)) return;
 
-  const { lat, lng, forecast, geocode, air, start, end } = req.query;
+  const { lat, lng, forecast, geocode, reverse, air, start, end } = req.query;
 
   const apiKey = process.env.OPENWEATHER_API_KEY;
   if (!apiKey) {
@@ -46,6 +47,12 @@ export default async function handler(req, res) {
     } else {
       return res.status(400).json({ error: '"air" must be current, forecast or history' });
     }
+  } else if (reverse !== undefined) {
+    const la = num(lat), lo = num(lng);
+    if (la === null || lo === null || la < -90 || la > 90 || lo < -180 || lo > 180) {
+      return res.status(400).json({ error: 'Valid "lat" and "lng" query params are required' });
+    }
+    url = `https://api.openweathermap.org/geo/1.0/reverse?lat=${la}&lon=${lo}&limit=1&appid=${apiKey}`;
   } else if (geocode) {
     url = `https://api.openweathermap.org/geo/1.0/direct?q=${encodeURIComponent(geocode)}&limit=5&appid=${apiKey}`;
   } else {

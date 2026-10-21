@@ -2595,8 +2595,8 @@ html.page-leaving body:not(:has(#app-shell-root)){
 .rain-card:not(.rain-card-dark) .error-state{color:#b3202f;}
 
 /* Cyan is a fill/accent colour, not a text colour, on light surfaces. */
-[data-theme="light"] .eyebrow{color:var(--accent-cyan-ink);}
-[data-theme="light"] .eyebrow::before{background:var(--accent-cyan-ink); box-shadow:0 0 0 4px rgba(11,110,117,.14);}
+[data-theme="light"] .app-content .eyebrow{color:var(--accent-cyan-ink);}   /* not the top bar: it stays dark in both themes */
+[data-theme="light"] .app-content .eyebrow::before{background:var(--accent-cyan-ink); box-shadow:0 0 0 4px rgba(11,110,117,.14);}
 .rain-card:not(.rain-card-dark) a[style*="accent-cyan"],
 .rain-card:not(.rain-card-dark) i[style*="accent-cyan"],
 .auth-form-col a[style*="accent-cyan"],
@@ -2741,28 +2741,59 @@ body[data-page="admin-incidents"]  {--page-accent:#e8703a;}
 .app-content label{color:var(--canvas-body);}
 .rain-card:not(.rain-card-dark) label{color:var(--ink-900);}
 
-/* ---------- Emergency page: street view, location card, search results (merged from emergency.github.io) ---------- */
-/* ---------- Street view panel ---------- */
+
+/* =========================================================================
+   EMERGENCY PAGE — street view panel, location card and search results
+   (from the new Emergency page version)
+   ========================================================================= */
 .sv-panel { border: 1px solid var(--surface-line); border-radius: 14px; overflow: hidden; background: #fff; }
 .sv-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .5rem;
   padding: .6rem .9rem; color: var(--navy-950); border-bottom: 1px solid var(--surface-line); }
 #svFrame { display: block; width: 100%; height: 360px; border: 0; background: #e2e8f0; }
 .sv-panel.sv-large #svFrame { height: 70vh; }
-.sv-foot { padding: .4rem .9rem; font-size: .75rem; color: var(--ink-400); }
+.sv-foot { padding: .4rem .9rem; font-size: .75rem; color: var(--ink-600); }
 .map-filter-btn.active#svModeBtn { background: var(--status-critical); border-color: var(--status-critical); }
 .leaflet-popup-content a[data-sv-lat] { color: var(--accent-cyan-ink); font-weight: 600; }
-
-/* ---------- Current location card + search results ---------- */
 .loc-card { background: linear-gradient(160deg, #1e40af, #1d4ed8); color: #fff; border-color: transparent; }
 .loc-title { font-weight: 800; letter-spacing: .12em; text-transform: uppercase; font-size: 1rem; }
-.loc-status { font-size: .8rem; opacity: .9; margin-top: .2rem; }
+.loc-status { font-size: .8rem; opacity: .92; margin-top: .2rem; }
 .loc-card .btn-rain { background: #fff; color: #1d4ed8; }
 .loc-card .btn-rain-ghost { background: transparent; color: #fff; border-color: rgba(255,255,255,.6); }
 .loc-card .btn-rain-ghost:hover { background: rgba(255,255,255,.15); }
 .loc-card .btn-rain:disabled { opacity: .5; cursor: not-allowed; }
 .loc-card .btn-rain-ghost.active { background: #fff; color: #1d4ed8; }
-.result-heading { font-size: .75rem; font-weight: 700; text-transform: uppercase; letter-spacing: .1em; color: var(--ink-400); }
+.result-heading { font-size: .75rem; font-weight: 700; text-transform: uppercase; letter-spacing: .1em; color: var(--ink-600); }
 .result-card { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .6rem;
   border: 1px solid var(--surface-line); border-radius: 12px; padding: .7rem .9rem; }
-#evac-map{height:460px;}
-.map-filter-btn.light.active#svModeBtn{background:var(--status-critical); border-color:var(--status-critical); color:#fff;}
+
+/* =========================================================================
+   AIR QUALITY — pollutant AQI tiles, level badges and legend
+   Colours follow the standard AQI ladder (green → maroon); every fill/text pair is ≥4.5:1.
+   ========================================================================= */
+.aq-grid{display:grid; grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); gap:.75rem;}
+.aq-tile{border:1px solid var(--surface-line); border-radius:12px; padding:.8rem .9rem; display:flex; flex-direction:column; gap:.4rem; background:rgba(10,24,48,.02);}
+.aq-num{font-family:var(--font-display); font-weight:700; font-size:1.8rem; line-height:1; color:var(--ink-900);}
+.aq-conc{font-size:.76rem; color:var(--ink-600);}
+.aq-badge,.aq-chip{display:inline-block; font-size:.74rem; font-weight:700; padding:.22rem .6rem; border-radius:999px; background:var(--surface-line); color:var(--ink-900); width:fit-content;}
+.aq-legend{display:flex; flex-wrap:wrap; align-items:center; gap:.4rem; font-size:.78rem;}
+.aq-badge[data-l="0"],.aq-chip[data-l="0"]{background:#15803d; color:#fff;}
+.aq-badge[data-l="1"],.aq-chip[data-l="1"]{background:#facc15; color:#1f2937;}
+.aq-badge[data-l="2"],.aq-chip[data-l="2"]{background:#c2410c; color:#fff;}
+.aq-badge[data-l="3"],.aq-chip[data-l="3"]{background:#b91c1c; color:#fff;}
+.aq-badge[data-l="4"],.aq-chip[data-l="4"]{background:#7e22ce; color:#fff;}
+.aq-badge[data-l="5"],.aq-chip[data-l="5"]{background:#7f1d1d; color:#fff;}
+
+/* =========================================================================
+   HEAT INDEX — hourly strip, stats and level reference
+   ========================================================================= */
+.hi-stats{display:grid; grid-template-columns:repeat(auto-fit, minmax(130px, 1fr)); gap:.6rem;}
+.hi-hours{display:flex; gap:.6rem; overflow-x:auto; padding-bottom:.3rem;}
+.hi-hour{flex:0 0 132px; border:1px solid var(--surface-line); border-radius:12px; padding:.7rem .8rem; display:flex; flex-direction:column; gap:.35rem; background:rgba(10,24,48,.02);}
+.hi-hour-t{font-weight:700; font-size:.8rem; color:var(--ink-600);}
+.hi-badge{display:inline-block; font-size:.72rem; font-weight:700; padding:.22rem .6rem; border-radius:999px; color:#fff; width:fit-content;}
+.hi-levels{display:grid; grid-template-columns:repeat(auto-fit, minmax(170px, 1fr)); gap:.6rem;}
+.hi-level{display:flex; flex-direction:column; gap:.3rem; border:1px solid var(--surface-line); border-radius:12px; padding:.7rem .8rem;}
+.hi-level.now{border-color:var(--accent-cyan-ink); box-shadow:0 0 0 2px color-mix(in srgb, var(--accent-cyan-ink) 25%, transparent);}
+
+/* Top-bar status label: lighter cyan so it clears 4.5:1 on the bar in both themes. */
+.app-topbar .eyebrow{color:#6fe3ea;}

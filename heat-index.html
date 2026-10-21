@@ -18,27 +18,43 @@
 
 <template id="heat-content">
   <div class="mb-4"><span class="eyebrow">Heat safety</span>
-    <h1 style="font-family:var(--font-display);font-weight:700;font-size:1.4rem;color:var(--canvas-heading);margin:.25rem 0 0;">Heat Index — Tanauan City</h1></div>
-  <div id="hiError" class="error-state d-none"><div><strong>Unable to retrieve weather data.</strong></div>
+    <h1 style="font-family:var(--font-display);font-weight:700;font-size:1.4rem;color:var(--canvas-heading);margin:.25rem 0 0;">Heat Index — <span id="hiPlace">Tanauan City</span></h1>
+    <div class="d-flex flex-wrap gap-2 mt-2">
+      <button class="btn-rain btn-rain-ghost btn-rain-sm" id="hiLocBtn" type="button"><i class="bi bi-crosshair"></i> <span>Use my location</span></button>
+      <button class="btn-rain btn-rain-ghost btn-rain-sm" id="hiRefresh" type="button"><i class="bi bi-arrow-clockwise"></i> Refresh</button>
+      <select id="hiBrgy" class="form-select form-select-sm" style="width:auto;max-width:260px;" aria-label="Barangay"></select>
+    </div>
+    <div id="hiLocMsg" class="text-muted mt-1" style="font-size:.78rem;" role="status"></div></div>
+  <div id="hiError" class="error-state d-none"><div><strong>Unable to retrieve weather data.</strong> Check your connection and try again.</div>
     <button class="btn-rain btn-rain-ghost btn-rain-sm mt-3" id="hiRetry">Retry</button></div>
   <div id="hiLoading" class="rain-card"><span class="skeleton d-block" style="height:120px;"></span></div>
   <div id="hiBody" class="d-none">
+    <div id="hiOffline" class="rain-card mb-3 d-none" style="border-left:4px solid #b45309;font-size:.85rem;"></div>
     <div class="rain-card mb-4">
       <div class="card-eyebrow"><span>Estimated heat index</span><span class="demo-data-tag" style="background:#b45309">CALCULATED ESTIMATE</span></div>
-      <div style="font-size:2.6rem;font-weight:700;" id="hiVal">—</div>
+      <div class="d-flex align-items-baseline flex-wrap gap-2"><span style="font-size:2.6rem;font-weight:700;" id="hiVal">—</span><span id="hiBadge"></span></div>
       <div id="hiCat" style="font-weight:600;"></div>
-      <div class="mt-2" style="font-size:.85rem;">Temperature <b id="hiT">—</b> · Humidity <b id="hiRH">—</b> · Observation time <b id="hiTime">—</b></div>
+      <div class="mt-2" style="font-size:.85rem;">Temperature <b id="hiT">—</b> · Humidity <b id="hiRH">—</b> · <span id="hiCond"></span> · Observation time <b id="hiTime">—</b></div>
+      <div class="hi-stats mt-3" id="hiStats"></div>
       <p class="mt-3 mb-0" id="hiAdvice"></p>
+      <div id="hiRhBox" class="mt-3 d-none" style="font-size:.85rem;">
+        <label for="hiRhRange"><b>Offline:</b> set the humidity you can feel to adjust the saved reading — <b id="hiRhOut"></b></label>
+        <input id="hiRhRange" type="range" min="30" max="100" step="1" class="form-range">
+      </div>
     </div>
-    <div class="rain-card mb-4"><div class="card-eyebrow"><span>Forecast (next ~24 h, 3-hourly)</span><span class="demo-data-tag" style="background:#b45309">FORECAST</span></div>
-      <div id="hiFc" style="font-size:.85rem;"></div></div>
+    <div class="rain-card mb-4"><div class="card-eyebrow"><span>Next hours (3-hourly)</span><span class="demo-data-tag" style="background:#b45309">FORECAST</span></div>
+      <div class="hi-hours" id="hiFc"></div></div>
+    <div class="rain-card mb-4"><div class="card-eyebrow"><span>Daily outlook — hottest hour of each day</span><span class="demo-data-tag" style="background:#b45309">FORECAST</span></div>
+      <div class="aq-grid" id="hiDays"></div></div>
+    <div class="rain-card mb-4"><div class="card-eyebrow"><span>Heat index levels (PAGASA classes)</span></div>
+      <div class="hi-levels" id="hiLevels"></div></div>
     <div class="rain-card mb-4" id="aiDigestHeat" style="font-size:.85rem;"></div>
     <div class="rain-card" style="font-size:.8rem;">
       <b>Source &amp; limitations.</b> Temperature and humidity come from OpenWeatherMap (a modeled/blended source, not a PAGASA station).
       The heat index is computed with the U.S. NWS Rothfusz regression (Steadman formula below 80&nbsp;°F), which assumes shade and light wind and
       is least reliable outside about 27–44&nbsp;°C and 40–100% humidity. Categories follow PAGASA's published heat-index classes, but this page is
-      <b>not</b> an official PAGASA observation or advisory. For official heat advisories see <a href="https://www.pagasa.dost.gov.ph" target="_blank" rel="noopener">pagasa.dost.gov.ph</a>.
-      Historical trends and official PAGASA values are not shown because no verified programmatic source is integrated yet.
+      <b>not</b> an official PAGASA observation or advisory. Choosing a barangay changes the label only: the reading is for the city centre.
+      For official heat advisories see <a href="https://www.pagasa.dost.gov.ph" target="_blank" rel="noopener">pagasa.dost.gov.ph</a>.
     </div>
   </div>
 </template>
@@ -57,33 +73,133 @@
 <script type="module">
   await RainAuth.init();
   const user = renderAppShell("heat-index.html", { title: "Heat Index" });
-  const LAT = 14.0863, LNG = 121.1497; // approximate Tanauan City center (lookup only, not a facility)
+  const HOME = { name: "Tanauan City", lat: 14.0863, lng: 121.1497 }; // approximate city centre (lookup only, not a facility)
+  const BARANGAYS = ["Altura Bata", "Altura Matanda", "Altura-South", "Ambulong", "Bagbag", "Bagumbayan", "Balele", "Banadero", "Banjo East", "Banjo Laurel", "Bilog-bilog", "Boot", "Cale", "Darasa", "Gonzales", "Hidalgo", "Janopol", "Janopol Oriental", "Laurel", "Luyos", "Mabini", "Malaking Pulo", "Maria Paz", "Maugat", "Montaña", "Natatas", "Pagaspas", "Pantay Bata", "Pantay Matanda", "Poblacion Barangay 1", "Poblacion Barangay 2", "Poblacion Barangay 3", "Poblacion Barangay 4", "Poblacion Barangay 5", "Poblacion Barangay 6", "Poblacion Barangay 7", "Sala", "Sambat", "San Jose", "Santol", "Santor", "Sulpoc", "Suplang", "Talaga", "Tinurik", "Trapiche", "Ulango", "Wawa"];
   const { heatIndexC, heatCategory } = RainIndices;
-  const cat = (c) => heatCategory(c).slice(0, 2);
   const $ = (id) => document.getElementById(id);
+  const esc = (t) => String(t).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const f1 = (n) => n.toFixed(1) + " °C";
-  async function load() {
-    $("hiError").classList.add("d-none"); $("hiLoading").classList.remove("d-none"); $("hiBody").classList.add("d-none");
-    try {
-      const [cur, fc] = await Promise.all([
-        fetch(`/api/weather?lat=${LAT}&lng=${LNG}`).then((r) => { if (!r.ok) throw new Error(r.status); return r.json(); }),
-        fetch(`/api/weather?lat=${LAT}&lng=${LNG}&forecast=1`).then((r) => { if (!r.ok) throw new Error(r.status); return r.json(); }),
-      ]);
-      if (typeof cur.main?.temp !== "number" || typeof cur.main?.humidity !== "number") throw new Error("missing fields");
-      const hi = heatIndexC(cur.main.temp, cur.main.humidity), [name, advice] = cat(hi);
-      $("hiVal").textContent = f1(hi); $("hiCat").textContent = name; $("hiAdvice").textContent = advice;
-      $("hiT").textContent = f1(cur.main.temp); $("hiRH").textContent = cur.main.humidity + "%";
-      $("hiTime").textContent = new Date(cur.dt * 1000).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
-      $("hiFc").innerHTML = (fc.list || []).slice(0, 8).map((x) => {
-        const h = heatIndexC(x.main.temp, x.main.humidity);
-        return `<div class="d-flex justify-content-between border-bottom py-1"><span>${new Date(x.dt * 1000).toLocaleString([], { weekday: "short", hour: "2-digit", minute: "2-digit" })}</span><span>${f1(h)} · ${cat(h)[0]}</span></div>`;
-      }).join("") || "No forecast data.";
-      $("hiLoading").classList.add("d-none"); $("hiBody").classList.remove("d-none");
-    } catch (e) { console.warn("heat index", e); $("hiLoading").classList.add("d-none"); $("hiError").classList.remove("d-none"); }
+  const cat = (c) => heatCategory(c).slice(0, 2);
+
+  // PAGASA heat-index classes (°C). Fill/text pairs are all >= 4.5:1.
+  const LV = [
+    { name: "Below caution range", min: -99, color: "#0369a1", range: "below 27 °C" },
+    { name: "Caution", min: 27, color: "#15803d", range: "27–32 °C" },
+    { name: "Extreme caution", min: 33, color: "#b45309", range: "33–41 °C" },
+    { name: "Danger", min: 42, color: "#c2410c", range: "42–51 °C" },
+    { name: "Extreme danger", min: 52, color: "#b91c1c", range: "52 °C and above" },
+  ];
+  const lvOf = (hi) => { let i = 0; LV.forEach((l, k) => { if (hi >= l.min) i = k; }); return i; };
+  const badge = (hi) => { const l = LV[lvOf(hi)]; return `<span class="hi-badge" style="background:${l.color}">${l.name}</span>`; };
+
+  let place = { ...HOME }, token = 0, model = null, TZ = 28800;
+  const JSONGET = (u) => fetch(u).then((r) => { if (!r.ok) throw new Error(r.status); return r.json(); });
+  const shifted = (dt) => new Date((dt + TZ) * 1000);               // read with getUTC* = local time at the place
+  const hourLabel = (dt) => { const d = shifted(dt), h = d.getUTCHours(); return (h % 12 || 12) + (h < 12 ? " AM" : " PM"); };
+  const dayKey = (dt) => shifted(dt).toISOString().slice(0, 10);
+  const dayLabel = (key, i) => i === 0 ? "Today" : new Date(key + "T00:00:00Z").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" });
+
+  // Build everything the page shows from a current reading + 3-hourly forecast.
+  function buildModel(cur, fc, name, lat, lng) {
+    const list = (fc.list || []).filter((x) => x && x.main && typeof x.main.temp === "number" && typeof x.main.humidity === "number");
+    const hours = list.slice(0, 8).map((x) => ({ dt: x.dt, t: x.main.temp, rh: x.main.humidity, pop: Math.round((x.pop || 0) * 100), hi: heatIndexC(x.main.temp, x.main.humidity) }));
+    const byDay = new Map();
+    list.forEach((x) => {
+      const k = dayKey(x.dt); if (!byDay.has(k)) byDay.set(k, { key: k, tmax: -99, tmin: 99, hi: -99, pop: 0, rh: [] });
+      const d = byDay.get(k), hi = heatIndexC(x.main.temp, x.main.humidity);
+      d.tmax = Math.max(d.tmax, x.main.temp); d.tmin = Math.min(d.tmin, x.main.temp); d.hi = Math.max(d.hi, hi);
+      d.pop = Math.max(d.pop, Math.round((x.pop || 0) * 100)); d.rh.push(x.main.humidity);
+    });
+    const days = [...byDay.values()].slice(0, 5);
+    return { name, lat, lng, tz: TZ, dt: cur.dt, t: cur.main.temp, rh: cur.main.humidity, cond: (cur.weather && cur.weather[0] && cur.weather[0].description) || "", hours, days };
   }
+
+  function render(m, opts) {
+    opts = opts || {};
+    TZ = m.tz;
+    const rh = opts.rh != null ? opts.rh : m.rh;
+    const hi = heatIndexC(m.t, rh), [name, advice] = cat(hi);
+    $("hiPlace").textContent = m.name;
+    $("hiVal").textContent = f1(hi); $("hiBadge").innerHTML = badge(hi); $("hiCat").textContent = name; $("hiAdvice").textContent = advice;
+    $("hiT").textContent = f1(m.t); $("hiRH").textContent = rh + "%";
+    $("hiCond").textContent = m.cond ? m.cond.charAt(0).toUpperCase() + m.cond.slice(1) : "";
+    $("hiTime").textContent = new Date(m.dt * 1000).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+    const today = m.days[0], nextPop = m.hours[0] ? m.hours[0].pop : null;
+    $("hiStats").innerHTML = [
+      ["Today's high", today ? f1(today.tmax) : "--"], ["Today's low", today ? f1(today.tmin) : "--"],
+      ["Chance of rain", nextPop == null ? "--" : nextPop + "%"], ["Hottest hour (HI)", today ? f1(today.hi) : "--"],
+    ].map(([k, v]) => `<div class="aq-tile"><div class="card-eyebrow">${k}</div><div class="aq-num" style="font-size:1.3rem;">${v}</div></div>`).join("");
+    $("hiFc").innerHTML = m.hours.length ? m.hours.map((h, i) => `<div class="hi-hour"><div class="hi-hour-t">${i === 0 ? "Next" : hourLabel(h.dt)}</div><div class="aq-num" style="font-size:1.25rem;">${Math.round(h.hi)}°</div>${badge(h.hi)}<div class="aq-conc">${Math.round(h.t)}°C · ${h.rh}% RH · ${h.pop}% rain</div></div>`).join("") : "No forecast data.";
+    $("hiDays").innerHTML = m.days.map((d, i) => {
+      const rhAvg = Math.round(d.rh.reduce((a, b) => a + b, 0) / d.rh.length);
+      return `<div class="aq-tile"><div class="card-eyebrow">${dayLabel(d.key, i)}</div><div class="aq-num">${Math.round(d.hi)}°</div>${badge(d.hi)}<div class="aq-conc">${Math.round(d.tmin)}–${Math.round(d.tmax)}°C · ${rhAvg}% RH · ${d.pop}% rain</div></div>`;
+    }).join("") || "<div class='text-muted'>Daily outlook unavailable.</div>";
+    $("hiLevels").innerHTML = LV.map((l, i) => `<div class="hi-level${lvOf(hi) === i ? " now" : ""}"><span class="hi-badge" style="background:${l.color}">${l.name}</span><span class="aq-conc">${l.range}</span></div>`).join("");
+    $("hiLoading").classList.add("d-none"); $("hiError").classList.add("d-none"); $("hiBody").classList.remove("d-none");
+  }
+
+  function showOffline(snap) {
+    const box = $("hiOffline"), m = snap.data;
+    box.innerHTML = `<b>Offline — showing a saved reading.</b> Last updated ${esc(RainOffline.timeAgo ? RainOffline.timeAgo(snap.savedAt) : new Date(snap.savedAt).toLocaleString())} for ${esc(m.name)}. The temperature is not live; use the humidity slider if the air feels different.`;
+    box.classList.remove("d-none");
+    const r = $("hiRhRange"); r.value = m.rh; $("hiRhOut").textContent = m.rh + "%"; $("hiRhBox").classList.remove("d-none");
+    r.oninput = () => { $("hiRhOut").textContent = r.value + "%"; render(m, { rh: +r.value }); };
+    render(m);
+  }
+
+  async function load() {
+    const my = ++token;
+    $("hiError").classList.add("d-none"); $("hiLoading").classList.remove("d-none"); $("hiBody").classList.add("d-none");
+    $("hiOffline").classList.add("d-none"); $("hiRhBox").classList.add("d-none");
+    try {
+      const q = `lat=${place.lat}&lng=${place.lng}`;
+      const [cur, fc] = await Promise.all([JSONGET(`/api/weather?${q}`), JSONGET(`/api/weather?${q}&forecast=1`)]);
+      if (my !== token) return;
+      if (typeof cur.main?.temp !== "number" || typeof cur.main?.humidity !== "number") throw new Error("missing fields");
+      TZ = typeof fc.city?.timezone === "number" ? fc.city.timezone : (typeof cur.timezone === "number" ? cur.timezone : 28800);
+      model = buildModel(cur, fc, place.name, place.lat, place.lng);
+      RainOffline.save("heat_index", model);                      // last good reading, for the offline view
+      render(model);
+    } catch (e) {
+      if (my !== token) return;
+      console.warn("heat index", e);
+      const snap = RainOffline.load("heat_index");
+      if (snap && snap.data && typeof snap.data.t === "number") { showOffline(snap); return; }
+      $("hiLoading").classList.add("d-none"); $("hiError").classList.remove("d-none");
+    }
+  }
+
+  function setPlace(name, lat, lng) {
+    place = { name, lat, lng };
+    const atHome = lat === HOME.lat && lng === HOME.lng;
+    $("hiLocBtn").querySelector("span").textContent = atHome ? "Use my location" : "Back to " + HOME.name;
+    $("hiBrgy").hidden = !atHome; $("hiBrgy").value = "";
+    load();
+  }
+
   if (user) {
     $("app-content").appendChild($("heat-content").content.cloneNode(true));
-    $("hiRetry").addEventListener("click", load); load();
+    $("hiBrgy").innerHTML = '<option value="">Barangay…</option>' + BARANGAYS.map((b) => `<option value="${esc(b)}">${esc(b)}</option>`).join("");
+    $("hiBrgy").addEventListener("change", (e) => {
+      // Label only: OpenWeatherMap has no per-barangay data, so the reading stays at the city centre.
+      $("hiPlace").textContent = e.target.value ? e.target.value + ", " + HOME.name : HOME.name;
+      $("hiLocMsg").textContent = e.target.value ? "Barangay is a label only — the reading is for Tanauan City centre." : "";
+    });
+    $("hiRetry").addEventListener("click", load);
+    $("hiRefresh").addEventListener("click", load);
+    $("hiLocBtn").addEventListener("click", () => {
+      const msg = $("hiLocMsg"); msg.textContent = "";
+      if (place.lat !== HOME.lat || place.lng !== HOME.lng) { setPlace(HOME.name, HOME.lat, HOME.lng); return; }
+      if (!navigator.geolocation) { msg.textContent = "Location is not supported on this device."; return; }
+      msg.textContent = "Finding your location…";
+      navigator.geolocation.getCurrentPosition(async (p) => {
+        const la = +p.coords.latitude.toFixed(3), lo = +p.coords.longitude.toFixed(3);   // ~100 m, never stored
+        let name = "your location (approx.)";
+        try { const r = await JSONGET(`/api/weather?reverse=1&lat=${la}&lng=${lo}`); if (Array.isArray(r) && r[0] && r[0].name) name = r[0].name; } catch (e) { /* keep generic name */ }
+        msg.textContent = ""; setPlace(name, la, lo);
+      }, () => { msg.textContent = "Location unavailable — showing Tanauan City. Allow location access to use your own."; }, { timeout: 8000 });
+    });
+    load();
   }
   RainDigest.mount("aiDigestHeat", "heat");
 </script>

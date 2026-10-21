@@ -35,10 +35,12 @@
 </template>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+<script src="https://unpkg.com/shpjs@4.0.4/dist/shp.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/animejs@4.5.0/lib/anime.iife.min.js"></script>
 <script src="assets/js/animations.js"></script>
 <script src="assets/js/icons.js"></script>
 <script src="assets/js/demo-data.js"></script>
+<script src="assets/js/tanauan-boundaries.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="assets/js/supabase-client.js"></script>
 <script src="assets/js/rain-auth.js"></script>
@@ -76,6 +78,7 @@
   P.innerHTML = `<b>Hazard at this pin</b>
     <input id="q" type="search" class="form-control form-control-sm mt-2" placeholder="Search city/municipality (e.g. Tanauan, Batangas), Enter" aria-label="Search place">
     <div class="text-muted" style="font-size:.74rem;">Drag the pin or click the map to move it. Search finds cities/towns, not street addresses.</div>
+    <button type="button" id="locBtn" class="btn-rain btn-rain-ghost btn-rain-sm mt-2"><i class="bi bi-crosshair"></i> <span>Use my location</span></button>
     <div id="hzRes" class="mt-2">Checking…</div>
     <hr><b>Controls</b>
     <label class="d-block mt-2"><input type="checkbox" id="b3" checked> 3D buildings (zoom in)</label>
@@ -83,7 +86,26 @@
     <label class="d-block">Vertical exaggeration <span id="exv">1.5</span>× <input type="range" id="ex" min="1" max="3" step="0.5" value="1.5" class="form-range"></label>
     <label class="d-block">Basemap <select id="bm" class="form-select form-select-sm"><option value="sat">Satellite</option><option value="osm">Street map</option></select></label>
     <label class="d-block mt-2">Hazard opacity <input type="range" id="op" min="20" max="100" value="60" class="form-range"></label>
-    <hr><b>Layers</b><div id="fl3L" class="mt-2"></div>`;
+    <hr><b>Layers</b><div id="fl3L" class="mt-2"></div>
+    <hr><b>More layers</b>
+    <div class="mt-2" id="fl3X">
+      <label class="d-block"><input type="checkbox" data-x="vec"> <b>MGB vector zones (live, by class)</b></label>
+      <div id="st-vec" class="text-muted mb-2">Off</div>
+      <label class="d-block"><input type="checkbox" data-x="brgy"> <b>Barangay boundaries</b></label>
+      <label class="d-block mt-2"><input type="checkbox" data-x="evac"> <b>Evacuation centers</b></label>
+      <label class="d-block"><input type="checkbox" data-x="hall"> <b>Barangay halls</b></label>
+      <div class="text-muted" style="font-size:.74rem;">Grey hall pins are approximate: they mark the barangay centre, not a confirmed hall location. This map has no live facility status; confirm with the CDRRMO.</div>
+    </div>
+    <hr><b>Your own hazard files</b>
+    <div class="text-muted" style="font-size:.74rem;">GeoJSON or a zipped shapefile (.zip with .shp, .dbf, .prj), e.g. downloaded from UP NOAH or MGB. Read in your browser only; nothing is uploaded.</div>
+    <input id="ownSrc" class="form-control form-control-sm mt-2" placeholder="Source, date and licence (shown in popups)" aria-label="Source, date and licence">
+    <label class="d-block mt-2">Flood file <input type="file" id="fileFlood" accept=".geojson,.json,.zip" class="form-control form-control-sm"></label>
+    <label class="d-block mt-2">Landslide file <input type="file" id="fileLandslide" accept=".geojson,.json,.zip" class="form-control form-control-sm"></label>
+    <div id="ownMsg" class="mt-2" style="font-size:.78rem;" role="status"></div>
+    <div id="ownStats" class="mt-1" style="font-size:.78rem;"></div>
+    <hr><b>Place facility pins</b>
+    <div class="text-muted" style="font-size:.74rem;">Mark key places on the map yourself. Saved in this browser only; roles are as specified, not verified.</div>
+    <div id="placeList" class="mt-2"></div>`;
   $("fl3L").innerHTML = HAZ.map((h) => `<div class="mb-3"><label><input type="checkbox" data-k="${h.id}" ${h.on ? "checked" : ""}> <b>${esc(h.label)}</b></label>
       <div><span class="demo-data-tag" style="background:#b45309">HAZARD SUSCEPTIBILITY</span></div><div id="st-${h.id}" class="text-muted">Waiting for map…</div></div>`).join("") +
     `<div class="mb-2"><label><input type="checkbox" data-k="reports" checked> <b>Community flood/landslide reports (30 days)</b></label>
@@ -112,7 +134,7 @@
   });
   const marker = new maplibregl.Marker({ draggable: true, color: "#dc2626" }).setLngLat([121.1497, 14.0863]).addTo(map); // start = approx. city center
   marker.on("dragend", () => queryPoint());
-  map.on("click", (e) => { if (map.getLayer("reports") && map.queryRenderedFeatures(e.point, { layers: ["reports"] }).length) return; marker.setLngLat(e.lngLat); queryPoint(); });
+  map.on("click", (e) => { if (placing) return; if (map.getLayer("reports") && map.queryRenderedFeatures(e.point, { layers: ["reports"] }).length) return; marker.setLngLat(e.lngLat); queryPoint(); });
   let qTok = 0;
   const SVC = [["Flood", "Flood susceptibility (MGB 2018)"], ["RainInducedLandslide", "Landslide susceptibility (MGB 2012)"]];
   async function queryPoint() {
@@ -159,6 +181,203 @@
     } catch (e) { console.warn("reports", e); st("reports", "Could not load reports"); }
   }
 
+
+  // =====================================================================
+  // Added from the new flood & landslide versions: live MGB vector zones, device location,
+  // your own hazard files (with area statistics), facilities, barangay boundaries, facility pins.
+  // =====================================================================
+  const LEVELS = ["High", "Moderate", "Low"];
+  const LEVEL_MAP = { "3": "High", high: "High", h: "High", "very high": "High", "2": "Moderate", moderate: "Moderate", medium: "Moderate", m: "Moderate", "1": "Low", low: "Low", l: "Low" };
+  const OWN = {
+    flood: { title: "Flood-prone area", fields: ["level", "Var", "GRIDCODE", "FloodSusc", "HAZ", "Hazard"], colors: { High: "#1d4ed8", Moderate: "#3b82f6", Low: "#93c5fd", Unclassified: "#94a3b8" },
+      actions: { High: "Monitor water levels and prepare for evacuation during heavy rain.", Moderate: "Stay alert to advisories. Keep an emergency bag ready.", Low: "Follow local advisories during heavy rain." } },
+    landslide: { title: "Landslide-prone area", fields: ["level", "LSSUSC", "Var", "GRIDCODE", "LandSusc", "HAZ"], colors: { High: "#d97706", Moderate: "#f59e0b", Low: "#fcd34d", Unclassified: "#94a3b8" },
+      actions: { High: "Watch for slope cracks and muddy streams. Prepare to evacuate in prolonged rain.", Moderate: "Avoid steep cuts. Monitor slopes after heavy rain.", Low: "Follow local advisories during heavy rain." } },
+  };
+  const ownData = {}, ownSource = {};
+  const walk = (c, fn) => { Array.isArray(c[0]) ? c.forEach((x) => walk(x, fn)) : fn(c); };
+  function validate(data, geomTypes) {
+    if (!data || data.type !== "FeatureCollection" || !data.features || !data.features.length) throw new Error("Not a non-empty GeoJSON FeatureCollection.");
+    let minX = 1e9, minY = 1e9, maxX = -1e9, maxY = -1e9;
+    for (const f of data.features) {
+      if (!f.geometry || !geomTypes.includes(f.geometry.type)) throw new Error("Expected " + geomTypes.join("/") + " features.");
+      walk(f.geometry.coordinates, ([x, y]) => { minX = Math.min(minX, x); maxX = Math.max(maxX, x); minY = Math.min(minY, y); maxY = Math.max(maxY, y); });
+    }
+    if (Math.abs(minX) > 180 || Math.abs(maxY) > 90) throw new Error("Not WGS84 (EPSG:4326). Reproject with ogr2ogr -t_srs EPSG:4326.");
+    if (minX < 30 && maxY > 100) throw new Error("Coordinates look like [lat, lng]; GeoJSON needs [lng, lat].");
+    if (maxX < 121.0 || minX > 121.4 || maxY < 13.95 || minY > 14.25) throw new Error("Data does not overlap Tanauan City.");
+    return data;
+  }
+  const levelOf = (p, fields) => { for (const k of fields) if (p[k] != null) return LEVEL_MAP[String(p[k]).trim().toLowerCase()] || "Unclassified"; return "Unclassified"; };
+  // Approximate planar area (m²) via a local equirectangular projection: fine for statistics, not for surveying.
+  function ringArea(r) { const k = 111320, c = Math.cos(r[0][1] * Math.PI / 180); let a = 0; for (let i = 0; i < r.length - 1; i++) a += (r[i][0] * c * k) * (r[i + 1][1] * k) - (r[i + 1][0] * c * k) * (r[i][1] * k); return Math.abs(a / 2); }
+  const geomArea = (g) => (g.type === "Polygon" ? [g.coordinates] : g.coordinates).reduce((s, p) => s + ringArea(p[0]) - p.slice(1).reduce((t, h) => t + ringArea(h), 0), 0);
+  function renderStats() {
+    $("ownStats").innerHTML = ["flood", "landslide"].filter((k) => ownData[k]).map((k) => {
+      const by = {}; ownData[k].features.forEach((x) => { const l = x.properties._lvl; (by[l] = by[l] || { n: 0, a: 0 }); by[l].n++; by[l].a += geomArea(x.geometry); });
+      return `<div class="fw-semibold mt-2">${OWN[k].title}</div>` + [...LEVELS, "Unclassified"].filter((l) => by[l]).map((l) =>
+        `<div class="d-flex justify-content-between"><span><span style="display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px;background:${OWN[k].colors[l]}"></span>${l}</span><span>${by[l].n} zones, ${(by[l].a / 1e6).toFixed(2)} km²</span></div>`).join("");
+    }).join("");
+  }
+  async function ingest(key, file) {
+    const msg = $("ownMsg");
+    try {
+      msg.textContent = "Reading " + file.name + "…";
+      let raw = /\.zip$/i.test(file.name) ? await shp(await file.arrayBuffer()) : JSON.parse(await file.text());
+      if (Array.isArray(raw)) raw = raw[0];
+      const data = validate(raw, ["Polygon", "MultiPolygon"]);
+      data.features.forEach((x) => { x.properties = { ...x.properties, _lvl: levelOf(x.properties, OWN[key].fields) }; });
+      ownData[key] = data; ownSource[key] = file.name + ($("ownSrc").value.trim() ? " | " + $("ownSrc").value.trim() : "");
+      map.getSource("own-" + key).setData(data);
+      map.setLayoutProperty("own-" + key, "visibility", "visible"); map.setLayoutProperty("own-" + key + "-line", "visibility", "visible");
+      renderStats();
+      const unc = data.features.some((x) => x.properties._lvl === "Unclassified");
+      msg.textContent = data.features.length + " zones loaded from " + file.name + "." + (unc ? " Some zones are unclassified. Fields in your file: " + Object.keys(data.features[0].properties).filter((k) => k !== "_lvl").join(", ") + "." : "");
+    } catch (e) { msg.textContent = file.name + ": " + e.message; }
+  }
+  $("fileFlood").addEventListener("change", (e) => { const f = e.target.files[0]; if (f) ingest("flood", f); });
+  $("fileLandslide").addEventListener("change", (e) => { const f = e.target.files[0]; if (f) ingest("landslide", f); });
+
+  // ---- Live MGB vector zones (polygons shaded by class) ----
+  const ringArea2 = (r) => r.reduce((a, p, i) => { const n = r[(i + 1) % r.length]; return a + (n[0] - p[0]) * (n[1] + p[1]); }, 0);
+  const classOf = (a) => {
+    if (!a) return "None mapped (outside susceptible zones)";
+    const keys = Object.keys(a).filter((k) => /susc|haz|class|level|rating|^f?hazard|^lh|^fh|^gridcode|^descript/i.test(k) && a[k] != null && a[k] !== "");
+    return (keys.length ? keys : Object.keys(a).filter((k) => typeof a[k] === "string")).slice(0, 2).map((k) => a[k]).join(" · ") || "Mapped (class not stated)";
+  };
+  const shade = (k, label) => {
+    const F = { very: "#1e3a8a", high: "#2563eb", mod: "#60a5fa", low: "#bfdbfe" }, S = { very: "#7f1d1d", high: "#dc2626", mod: "#f97316", low: "#fde047" };
+    const Pp = k === "flood" ? F : S, t = String(label).toLowerCase();
+    return /very/.test(t) ? Pp.very : /high|\bh\b|^3$|debris|accum/.test(t) ? Pp.high : /mod|\bm\b|^2$/.test(t) ? Pp.mod : Pp.low;
+  };
+  function jsonp(url) {
+    return new Promise((res, rej) => {
+      const cb = "cb" + Math.random().toString(36).slice(2), el = document.createElement("script");
+      const done = () => { clearTimeout(t); delete window[cb]; el.remove(); };
+      const t = setTimeout(() => { done(); rej(new Error("timeout")); }, 20000);
+      window[cb] = (d) => { done(); res(d); }; el.onerror = () => { done(); rej(new Error("load")); };
+      el.src = url + "&callback=" + cb; document.head.appendChild(el);
+    });
+  }
+  const arc = async (url) => { try { const r = await fetch(url); return await r.json(); } catch (e) { return jsonp(url); } };
+  function toGeo(j, k) {
+    const out = [];
+    (j.features || []).forEach((f) => {
+      const rings = (f.geometry && f.geometry.rings) || [], polys = [];
+      rings.forEach((r) => { if (ringArea2(r) > 0) polys.push([r]); else if (polys.length) polys[polys.length - 1].push(r); });
+      if (!polys.length) return;
+      const lab = classOf(f.attributes);
+      out.push({ type: "Feature", properties: { k, label: lab, _c: shade(k, lab) }, geometry: { type: "MultiPolygon", coordinates: polys } });
+    });
+    return out;
+  }
+  let vecLoaded = false;
+  async function loadVec() {
+    if (vecLoaded) return; vecLoaded = true; st("vec", "Loading polygons…");
+    const env = "121.04,14.00,121.25,14.17"; let ok = 0; const feats = [];
+    for (const h of HAZ) {
+      const k = h.id;
+      try {
+        const j = await arc(`${h.url}/0/query?where=1%3D1&geometry=${env}&geometryType=esriGeometryEnvelope&inSR=4326&outSR=4326&spatialRel=esriSpatialRelIntersects&outFields=*&returnGeometry=true&maxAllowableOffset=0.0003&resultRecordCount=2000&f=json`);
+        if (j.error) throw new Error(j.error.message);
+        feats.push(...toGeo(j, k)); ok++;
+      } catch (e) { console.warn("vector load failed", k, e); }
+    }
+    map.getSource("vec").setData({ type: "FeatureCollection", features: feats });
+    if (!ok) vecLoaded = false;
+    st("vec", ok ? feats.length + " polygons loaded in the Tanauan area" + (ok < 2 ? " (one service did not respond)" : "") : "Vector polygons could not be loaded (service unreachable)");
+  }
+
+  // ---- Facilities (evacuation centers + barangay halls) and barangay boundaries from the app's own data ----
+  const facFeatures = (kind, list) => ({ type: "FeatureCollection", features: list.filter((x) => typeof x.lat === "number" && typeof x.lng === "number").map((x) => ({
+    type: "Feature", geometry: { type: "Point", coordinates: [x.lng, x.lat] }, properties: { kind, name: x.name, type: x.type || x.hall || "", address: x.address || "", approx: !!x.approx } })) });
+  const popupHTML = (p) => `<b>${esc(p.name)}</b><br>${esc(p.type)}${p.address ? "<br>" + esc(p.address) : ""}${p.approx === true || p.approx === "true" ? "<br><i>Approximate: barangay centre, not a confirmed hall location.</i>" : ""}<br><b>Operational status:</b> Not verified<br><small>This map has no live status feed. Confirm with the CDRRMO or the facility.</small>`;
+
+  map.on("load", () => {
+    ["flood", "landslide"].forEach((k) => {
+      map.addSource("own-" + k, { type: "geojson", data: { type: "FeatureCollection", features: [] } });
+      const c = OWN[k].colors, color = ["match", ["get", "_lvl"], "High", c.High, "Moderate", c.Moderate, "Low", c.Low, c.Unclassified];
+      map.addLayer({ id: "own-" + k, type: "fill", source: "own-" + k, layout: { visibility: "none" }, paint: { "fill-color": color, "fill-opacity": 0.6 } });
+      map.addLayer({ id: "own-" + k + "-line", type: "line", source: "own-" + k, layout: { visibility: "none" }, paint: { "line-color": color, "line-width": 1 } });
+      map.on("click", "own-" + k, (e) => {
+        const p = e.features[0].properties, lvl = p._lvl;
+        new maplibregl.Popup().setLngLat(e.lngLat).setHTML(`<b>${OWN[k].title}</b><br><b>Level:</b> ${esc(lvl)}<br>${OWN[k].actions[lvl] ? "<b>What to do:</b> " + esc(OWN[k].actions[lvl]) + "<br>" : ""}<small>Source: ${esc(ownSource[k] || "your file")}</small>`).addTo(map);
+      });
+    });
+    map.addSource("vec", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
+    map.addLayer({ id: "vec-fill", type: "fill", source: "vec", layout: { visibility: "none" }, paint: { "fill-color": ["get", "_c"], "fill-opacity": 0.5 } });
+    map.addLayer({ id: "vec-line", type: "line", source: "vec", layout: { visibility: "none" }, paint: { "line-color": ["get", "_c"], "line-width": 1 } });
+    map.on("click", "vec-fill", (e) => { const p = e.features[0].properties; new maplibregl.Popup().setLngLat(e.lngLat).setHTML(`<b>${p.k === "flood" ? "Flood" : "Rain-induced landslide"} susceptibility</b><br>${esc(p.label)}<br><small>MGB data, simplified polygon.</small>`).addTo(map); });
+
+    if (window.RAIN_BOUNDARIES) {
+      map.addSource("brgy", { type: "geojson", data: window.RAIN_BOUNDARIES });
+      map.addLayer({ id: "brgy-fill", type: "fill", source: "brgy", layout: { visibility: "none" }, paint: { "fill-color": "#ffffff", "fill-opacity": 0.01 } });
+      map.addLayer({ id: "brgy-line", type: "line", source: "brgy", layout: { visibility: "none" }, paint: { "line-color": "#f8fafc", "line-width": 1.4, "line-dasharray": [2, 1] } });
+      map.on("click", "brgy-fill", (e) => { new maplibregl.Popup().setLngLat(e.lngLat).setHTML(`<b>Barangay ${esc(e.features[0].properties.name)}</b>`).addTo(map); });
+    }
+    const D = typeof RAIN_DEMO !== "undefined" ? RAIN_DEMO : {};
+    map.addSource("evac", { type: "geojson", data: facFeatures("evac", D.evacuationCenters || []) });
+    map.addLayer({ id: "evac-pts", type: "circle", source: "evac", layout: { visibility: "none" }, paint: { "circle-radius": 7, "circle-color": "#16a34a", "circle-stroke-color": "#fff", "circle-stroke-width": 2, "circle-pitch-alignment": "map" } });
+    map.addSource("hall", { type: "geojson", data: facFeatures("hall", D.barangays || []) });
+    map.addLayer({ id: "hall-pts", type: "circle", source: "hall", layout: { visibility: "none" }, paint: { "circle-radius": 6, "circle-color": ["case", ["==", ["get", "approx"], true], "#94a3b8", "#475569"], "circle-stroke-color": "#fff", "circle-stroke-width": 2, "circle-pitch-alignment": "map" } });
+    ["evac-pts", "hall-pts"].forEach((id) => {
+      map.on("click", id, (e) => { new maplibregl.Popup({ offset: 10 }).setLngLat(e.features[0].geometry.coordinates).setHTML(popupHTML(e.features[0].properties)).addTo(map); });
+      map.on("mouseenter", id, () => { map.getCanvas().style.cursor = "pointer"; }); map.on("mouseleave", id, () => { map.getCanvas().style.cursor = ""; });
+    });
+    renderPlace(); Object.keys(placed).forEach((id) => { const pr = PRESET.find((x) => x.id === id); if (pr) addPin(pr, placed[id]); });
+  });
+  const X_LAYERS = { vec: ["vec-fill", "vec-line"], brgy: ["brgy-fill", "brgy-line"], evac: ["evac-pts"], hall: ["hall-pts"] };
+  $("fl3X").addEventListener("change", (e) => {
+    const k = e.target.dataset && e.target.dataset.x; if (!k) return;
+    (X_LAYERS[k] || []).forEach((id) => map.getLayer(id) && map.setLayoutProperty(id, "visibility", e.target.checked ? "visible" : "none"));
+    if (k === "vec") { st("vec", e.target.checked ? "Loading polygons…" : "Off"); if (e.target.checked) loadVec(); }
+  });
+
+  // ---- Place facility pins by hand (kept in this browser only) ----
+  const PRESET = [
+    { id: "cityhall", name: "Tanauan City Hall", type: "Government", color: "#475569", mark: "G", role: "Command & Disaster Risk Reduction Center (role as specified)", address: "Tanauan City, Batangas" },
+    { id: "hospital", name: "C.P. Reyes Hospital", type: "Hospital", color: "#dc2626", mark: "H", role: "Emergency Medical Care Hub (role as specified)", address: "#41 A. Mabini Avenue, Poblacion IV (public directory listing; some listings now say Tanauan Medical Center)" },
+    { id: "institute", name: "Tanauan Institute", type: "Evacuation center", color: "#16a34a", mark: "E", role: "Evacuation & Shelter Center (as specified; confirm designation with the CDRRMO)", address: "Tanauan City, Batangas" },
+    { id: "market", name: "Tanauan Public Market", type: "Market", color: "#d97706", mark: "M", role: "High-density commercial activity hub (role as specified)", address: "Tanauan City, Batangas" },
+  ];
+  let placed = {}; try { placed = JSON.parse(localStorage.getItem("placedFacilities") || "{}"); } catch (e) { /* storage unavailable */ }
+  let placing = null; const pins = {};
+  function addPin(pr, coords) {
+    if (pins[pr.id]) pins[pr.id].remove();
+    const el = document.createElement("div");
+    el.title = pr.name; el.textContent = pr.mark;
+    el.style.cssText = `width:26px;height:26px;border-radius:50%;background:${pr.color};color:#fff;font:700 12px sans-serif;display:flex;align-items:center;justify-content:center;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.4);`;
+    const popup = new maplibregl.Popup({ offset: 18 }).setHTML(`<b>${esc(pr.name)}</b><br>${esc(pr.type)}<br>${esc(pr.role)}<br>${esc(pr.address)}<br><b>Operational status:</b> Not verified<br><small>This map has no live status feed. Confirm with the CDRRMO or the facility.</small>`);
+    pins[pr.id] = new maplibregl.Marker({ element: el }).setLngLat(coords).setPopup(popup).addTo(map);
+  }
+  function renderPlace() {
+    $("placeList").innerHTML = PRESET.map((p) => `<div class="d-flex align-items-center justify-content-between gap-2 mb-1"><span>${esc(p.name)}</span><span class="d-flex gap-1">
+      <button type="button" class="btn-rain btn-rain-ghost btn-rain-sm" data-place="${p.id}">${placing === p.id ? "Click map…" : placed[p.id] ? "Move" : "Place"}</button>
+      ${placed[p.id] ? `<button type="button" class="btn-rain btn-rain-ghost btn-rain-sm" data-clear="${p.id}">Clear</button>` : ""}</span></div>`).join("");
+  }
+  $("placeList").addEventListener("click", (e) => {
+    const id = e.target.dataset.place, clr = e.target.dataset.clear;
+    if (id) { placing = id; map.getCanvas().style.cursor = "crosshair"; }
+    if (clr) { delete placed[clr]; if (pins[clr]) { pins[clr].remove(); delete pins[clr]; } try { localStorage.setItem("placedFacilities", JSON.stringify(placed)); } catch (er) {} }
+    renderPlace();
+  });
+  map.on("click", (e) => {
+    if (!placing) return;
+    const pr = PRESET.find((x) => x.id === placing); placed[placing] = [e.lngLat.lng, e.lngLat.lat];
+    try { localStorage.setItem("placedFacilities", JSON.stringify(placed)); } catch (er) { /* storage unavailable */ }
+    addPin(pr, placed[placing]); placing = null; map.getCanvas().style.cursor = ""; renderPlace();
+  });
+
+  // ---- Use my location: drop the hazard pin on the device's GPS fix ----
+  $("locBtn").addEventListener("click", () => {
+    if (!navigator.geolocation) { $("hzRes").textContent = "Location is not supported on this device."; return; }
+    $("hzRes").textContent = "Finding your location…";
+    navigator.geolocation.getCurrentPosition((p) => {
+      const c = [+p.coords.longitude.toFixed(5), +p.coords.latitude.toFixed(5)];
+      marker.setLngLat(c); map.flyTo({ center: c, zoom: Math.max(map.getZoom(), 14) }); queryPoint();
+    }, (err) => { $("hzRes").textContent = err.code === 1 ? "Location permission denied. Allow location access in your browser and try again." : "Could not get your location. Try again outdoors or with Wi-Fi on."; }, { enableHighAccuracy: true, timeout: 10000 });
+  });
+
   P.addEventListener("change", (e) => {
     const t = e.target, k = t.dataset && t.dataset.k;
     if (k) { map.setLayoutProperty(k, "visibility", t.checked ? "visible" : "none"); if (k !== "reports") st(k, t.checked ? "Loading…" : "Off"); }
@@ -168,7 +387,7 @@
   });
   P.addEventListener("input", (e) => {
     if (e.target.id === "ex") { $("exv").textContent = e.target.value; if ($("t3").checked) map.setTerrain({ source: "dem", exaggeration: +e.target.value }); }
-    if (e.target.id === "op") HAZ.forEach((h) => map.getLayer(h.id) && map.setPaintProperty(h.id, "raster-opacity", e.target.value / 100));
+    if (e.target.id === "op") { HAZ.forEach((h) => map.getLayer(h.id) && map.setPaintProperty(h.id, "raster-opacity", e.target.value / 100)); ["flood", "landslide"].forEach((k) => map.getLayer("own-" + k) && map.setPaintProperty("own-" + k, "fill-opacity", e.target.value / 100)); }
   });
 </script>
 </body>
