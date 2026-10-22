@@ -119,7 +119,6 @@
 
   function initEmergencyPage() {
     const content = document.getElementById("app-content");
-    content.style.maxWidth = "1240px";
     content.appendChild(document.getElementById("emergency-content").content.cloneNode(true));
     document.getElementById("activateEmergencyBtn").addEventListener("click", () => RainEmergencyMode.open());
 
