@@ -2898,3 +2898,50 @@ body[data-page="admin-incidents"]  {--page-accent:#e8703a;}
 @media (min-width: 768px){
   .hero-cta{min-width:11rem; justify-content:center;}
 }
+
+/* =========================================================================
+   EMERGENCY PAGE — layout fixes
+   - CALL buttons wrapped phone numbers mid-number ("CALL 0962 347 / 5073")
+     inside the narrow two-column tiles.
+   - Contact tiles had uneven heights; buttons now sit evenly in each tile.
+   - The evacuation map was only 340px tall, so its layer control, search box
+     and legend overlapped each other; it is taller and the shelter results
+     list scrolls instead of making the page endlessly long.
+   - Faded disabled buttons on the blue location card were hard to read.
+   ========================================================================= */
+#contactGrid > div > div{display:flex; flex-direction:column; align-items:stretch;}
+#contactGrid > div > div > i{align-self:center;}
+#contactGrid > div > div > .d-flex{margin-top:auto;}
+#contactGrid .btn-emergency{
+  white-space:nowrap; justify-content:center; gap:.5rem;
+  padding:.7rem .6rem; font-size:clamp(.82rem, .9vw + .5rem, 1rem);
+  letter-spacing:0;
+}
+#contactGrid .btn-emergency i{flex-shrink:0;}
+
+.loc-card .btn-rain:disabled{opacity:.7; background:rgba(255,255,255,.16); color:#fff; border-color:rgba(255,255,255,.35);}
+.loc-card .btn-rain, .loc-card .btn-rain-ghost{white-space:nowrap;}
+
+#evac > div[style*="font-size:.75rem"]{
+  display:flex; flex-wrap:wrap; align-items:center; gap:.3rem 1rem; line-height:1.4;
+}
+#evac #evacSearch{margin-top:.25rem;}
+
+#evac-map{height:480px;}
+@media (max-width:767.98px){ #evac-map{height:380px;} }
+
+#evacResult{max-height:460px; overflow-y:auto; padding-right:.25rem; overscroll-behavior:contain;}
+.result-card > :first-child{flex:1 1 220px; min-width:0;}
+.result-card .evac-type-badge, .result-card [class*="badge"]{white-space:nowrap;}
+.result-card .btn-rain{white-space:nowrap;}
+
+/* Emergency map: the bottom-right "Layers" legend repeats the layer picker
+   and covered the markers, so it's tucked away on narrower screens and
+   compacted on wide ones. */
+#evac-map .leaflet-bottom.leaflet-right .leaflet-control:not(.leaflet-control-attribution){
+  font-size:.68rem; line-height:1.25; max-width:170px; margin-bottom:6px; opacity:.94;
+}
+@media (max-width:1199.98px){
+  #evac-map .leaflet-bottom.leaflet-right .leaflet-control:not(.leaflet-control-attribution){display:none;}
+}
+#evac-map .leaflet-top.leaflet-left .leaflet-control-container, #evac-map .leaflet-control{max-width:calc(100% - 20px);}
