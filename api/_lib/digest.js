@@ -93,3 +93,20 @@ export function extractImage(json) {
   }
   return null;
 }
+
+/** On a bulletin LIST page, find the newest bulletin link of one volcano (code: tvo = Taal). Same host only; prefers the English version. */
+export function findLatestBulletinUrl(html, listUrl, code = 'tvo') {
+  let base; try { base = new URL(listUrl); } catch { return null; }
+  if (base.protocol !== 'https:') return null;
+  const re = new RegExp('href=["\']([^"\']*?/bulletin/activity-' + code + '\\?[^"\']*)["\']', 'gi');
+  let best = null;
+  for (const m of String(html || '').matchAll(re)) {
+    let u; try { u = new URL(m[1].replace(/&amp;/g, '&'), base); } catch { continue; }
+    if (u.protocol !== 'https:' || u.host !== base.host) continue;
+    const bid = Number(u.searchParams.get('bid'));
+    if (!Number.isInteger(bid) || bid <= 0) continue;
+    const en = u.searchParams.get('lang') === 'en';
+    if (!best || bid > best.bid || (bid === best.bid && en && !best.en)) best = { bid, en, url: u.toString() };
+  }
+  return best ? best.url : null;
+}

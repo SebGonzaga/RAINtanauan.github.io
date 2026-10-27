@@ -1,14 +1,21 @@
 // /api/daily-digest.js — nightly AI digest of PUBLIC PHIVOLCS / PAGASA pages (additional feature; unofficial).
 // Triggered by Vercel Cron (vercel.json: 0 16 * * * UTC = 00:00 Philippine time; on the Hobby plan it may fire any time within that hour).
 // Env: CRON_SECRET (required; Vercel sends it as a Bearer token), SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, GEMINI_API_KEY,
-//      DIGEST_VOLCANO_URL and/or DIGEST_HEAT_URL (exact public https pages to read; a kind is skipped when its URL is unset),
+//      DIGEST_VOLCANO_URL and/or DIGEST_HEAT_URL (exact public https pages to read; a kind is skipped when its URL is unset;
+//      for volcano it may be the PHIVOLCS bulletin LIST page: the newest Taal bulletin linked there is then read instead),
 //      GEMINI_MODEL (optional), GEMINI_IMAGE_MODEL (optional, default gemini-2.5-flash-image), DIGEST_IMAGES=off to skip pictures.
 // Pictures: after a summary is saved with status 'ok', one AI illustration is generated from that summary, uploaded to the public
 //      Supabase Storage bucket 'digest-images' (migration 011) and linked in ai_digests.image_url. Best effort: a failure never hides the text.
-import { htmlToText, extractAlertLevel, SYSTEM_PROMPT, buildPrompt, parseModelJson, numbersSupported, sha256Hex, phtDate, buildImagePrompt, extractImage } from './_lib/digest.js';
+import { htmlToText, extractAlertLevel, SYSTEM_PROMPT, buildPrompt, parseModelJson, numbersSupported, sha256Hex, phtDate, buildImagePrompt, extractImage, findLatestBulletinUrl } from './_lib/digest.js';
 
 const KINDS = [['volcano', 'DIGEST_VOLCANO_URL'], ['heat', 'DIGEST_HEAT_URL']];
 const GEMINI = 'https://generativelanguage.googleapis.com/v1beta/models';
+
+async function getPage(url) {
+  const r = await fetch(url, { headers: { 'User-Agent': 'RAIN-digest/1.0 (disaster-awareness app)' }, signal: AbortSignal.timeout(6000) });
+  if (!r.ok) throw new Error('source ' + r.status);
+  return r.text();
+}
 
 const sbHeaders = () => ({ apikey: process.env.SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY}` });
 
@@ -36,7 +43,7 @@ async function makeImage(kind, date, summary) {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'x-goog-api-key': process.env.GEMINI_API_KEY },
     body: JSON.stringify({ contents: [{ role: 'user', parts: [{ text: buildImagePrompt(kind, summary) }] }], generationConfig: { responseModalities: ['TEXT', 'IMAGE'] } }),
-    signal: AbortSignal.timeout(24000),
+    signal: AbortSignal.timeout(20000),
   });
   if (!r.ok) throw new Error('gemini image ' + r.status);
   const img = extractImage(await r.json());
@@ -67,9 +74,12 @@ async function runOne(kind, url, date) {
   }
   const row = { kind, digest_date: date, source_url: url, status: 'source_unreachable', alert_level: null, summary: null, source_fetched_at: null, source_sha256: null, model: null };
   try {
-    const page = await fetch(url, { headers: { 'User-Agent': 'RAIN-digest/1.0 (disaster-awareness app)' }, signal: AbortSignal.timeout(8000) });
-    if (!page.ok) throw new Error('source ' + page.status);
-    const text = htmlToText(await page.text());
+    let html = await getPage(url);
+    if (kind === 'volcano') { // list page? follow its newest Taal bulletin (same host only)
+      const latest = findLatestBulletinUrl(html, url, 'tvo');
+      if (latest && latest !== url) { html = await getPage(latest); row.source_url = latest; }
+    }
+    const text = htmlToText(html);
     row.source_fetched_at = new Date().toISOString();
     if (text.length < 200) { row.status = 'source_unparsed'; }
     else {

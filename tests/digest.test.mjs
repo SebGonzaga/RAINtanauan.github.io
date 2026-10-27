@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { htmlToText, extractAlertLevel, parseModelJson, numbersSupported, phtDate, buildImagePrompt, extractImage } from '../api/_lib/digest.js';
+import { htmlToText, extractAlertLevel, parseModelJson, numbersSupported, phtDate, buildImagePrompt, extractImage, findLatestBulletinUrl } from '../api/_lib/digest.js';
 import handler from '../api/daily-digest.js';
 
 test('htmlToText drops scripts/tags and decodes entities', () => {
@@ -152,4 +152,29 @@ test('a good summary row with no picture only retries the picture', async () => 
   await handler({ method: 'GET', headers: { authorization: 'Bearer sekret' } }, t.res); t.done();
   assert.match(t.res.body.results.volcano, /summary already done; image ok/);
   assert.ok(!t.calls.some((c) => c.url === 'https://src.test/taal'));
+});
+
+// ---- bulletin list page ----
+const LIST = '<a href="https://w.test/bulletin/activity-mvo?bid=16940&amp;lang=en">Mayon</a>' +
+  '<a href="/bulletin/activity-tvo?bid=16937">Taal FIL</a><a href="/bulletin/activity-tvo?bid=16937&amp;lang=en">Taal EN</a>' +
+  '<a href="/bulletin/activity-tvo?bid=16900&amp;lang=en">old</a><a href="https://evil.test/bulletin/activity-tvo?bid=99999&amp;lang=en">x</a>';
+test('findLatestBulletinUrl picks the newest Taal bulletin, English, same host only', () => {
+  assert.equal(findLatestBulletinUrl(LIST, 'https://w.test/bulletin/list-of-bulletin'), 'https://w.test/bulletin/activity-tvo?bid=16937&lang=en');
+  assert.equal(findLatestBulletinUrl('no links', 'https://w.test/x'), null);
+  assert.equal(findLatestBulletinUrl(LIST, 'http://w.test/x'), null);
+});
+test('volcano list page: reads the newest Taal bulletin and stores its URL', async () => {
+  const BUL = '<table><tr><td>ALERT LEVEL</td><td>1</td></tr></table>' + '<p>Taal Volcano Summary of 24Hr Observation. Sulfur dioxide 557 tonnes / day. Plume 1800 meters tall. </p>'.repeat(4);
+  const t = run({ DIGEST_VOLCANO_URL: 'https://w.test/bulletin/list-of-bulletin', DIGEST_IMAGES: 'off' }, (url) => {
+    if (url.includes('/rest/v1/ai_digests?select')) return ok([]);
+    if (url === 'https://w.test/bulletin/list-of-bulletin') return ok(LIST);
+    if (url === 'https://w.test/bulletin/activity-tvo?bid=16937&lang=en') return ok(BUL);
+    if (url.includes('generateContent')) return ok({ candidates: [{ content: { parts: [{ text: '{"summary":"Alert Level 1. Plume 1800 meters tall.","points":[]}' }] } }] });
+    if (url.includes('on_conflict')) return { ok: true, status: 201 };
+    throw new Error('unexpected ' + url);
+  });
+  await handler({ method: 'GET', headers: { authorization: 'Bearer sekret' } }, t.res); t.done();
+  const saved = JSON.parse(t.calls.find((c) => c.url.includes('on_conflict')).opts.body);
+  assert.equal(saved.status, 'ok'); assert.equal(saved.alert_level, 1);
+  assert.equal(saved.source_url, 'https://w.test/bulletin/activity-tvo?bid=16937&lang=en');
 });
