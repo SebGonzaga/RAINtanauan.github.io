@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { htmlToText, extractAlertLevel, parseModelJson, numbersSupported, phtDate } from '../api/_lib/digest.js';
+import { htmlToText, extractAlertLevel, parseModelJson, numbersSupported, phtDate, buildImagePrompt, extractImage } from '../api/_lib/digest.js';
 import handler from '../api/daily-digest.js';
 
 test('htmlToText drops scripts/tags and decodes entities', () => {
@@ -82,7 +82,74 @@ test('does not publish a summary containing invented numbers', async () => {
   assert.equal(saved.status, 'ai_failed'); assert.equal(saved.summary, null);
 });
 test('skips work already done today', async () => {
-  const t = run({ DIGEST_VOLCANO_URL: 'https://src.test/taal' }, (url) => { if (url.includes('/rest/v1/ai_digests?select')) return ok([{ status: 'ok' }]); throw new Error('unexpected ' + url); });
+  const t = run({ DIGEST_VOLCANO_URL: 'https://src.test/taal' }, (url) => { if (url.includes('/rest/v1/ai_digests?select')) return ok([{ status: 'ok', image_url: 'https://sb.test/storage/v1/object/public/digest-images/volcano/x.png', summary: 's' }]); throw new Error('unexpected ' + url); });
   await handler({ method: 'GET', headers: { authorization: 'Bearer sekret' } }, t.res); t.done();
   assert.equal(t.res.body.results.volcano, 'already done today');
+});
+
+// ---- illustration step ----
+const PNG_B64 = Buffer.alloc(400, 7).toString('base64');
+const IMG_RESP = { candidates: [{ content: { parts: [{ text: 'here' }, { inlineData: { mimeType: 'image/png', data: PNG_B64 } }] } }] };
+const SUMMARY_RESP = { candidates: [{ content: { parts: [{ text: '{"summary":"Alert Level 2 with 34 volcanic earthquakes.","points":[]}' }] } }] };
+
+test('buildImagePrompt uses the summary and forbids text and invented drama', () => {
+  const p = buildImagePrompt('volcano', 'Alert Level 1. Calm.');
+  assert.match(p, /Alert Level 1\. Calm\./); assert.match(p, /No text/); assert.match(p, /do NOT draw eruptions/);
+});
+test('extractImage returns the inline image and rejects other data', () => {
+  assert.equal(extractImage(IMG_RESP).ext, 'png');
+  assert.equal(extractImage(SUMMARY_RESP), null);
+  assert.equal(extractImage({ candidates: [{ content: { parts: [{ inlineData: { mimeType: 'text/html', data: PNG_B64 } }] } }] }), null);
+});
+test('an ok digest also gets an uploaded illustration linked on its row', async () => {
+  const t = run({ DIGEST_VOLCANO_URL: 'https://src.test/taal' }, (url) => {
+    if (url.includes('/rest/v1/ai_digests?select')) return ok([]);
+    if (url === 'https://src.test/taal') return ok(PAGE);
+    if (url.includes('gemini-2.5-flash-image:generateContent')) return ok(IMG_RESP);
+    if (url.includes('generateContent')) return ok(SUMMARY_RESP);
+    if (url.includes('/storage/v1/object/digest-images/')) return { ok: true, status: 200 };
+    if (url.includes('on_conflict') || url.includes('kind=eq.volcano')) return { ok: true, status: 204 };
+    throw new Error('unexpected ' + url);
+  });
+  await handler({ method: 'GET', headers: { authorization: 'Bearer sekret' } }, t.res); t.done();
+  assert.match(t.res.body.results.volcano, /image ok/);
+  const patch = t.calls.find((c) => c.opts.method === 'PATCH');
+  assert.match(JSON.parse(patch.opts.body).image_url, /\/storage\/v1\/object\/public\/digest-images\/volcano\/.+\.png$/);
+});
+test('if the picture fails the text summary is still saved and the run does not crash', async () => {
+  const t = run({ DIGEST_VOLCANO_URL: 'https://src.test/taal' }, (url) => {
+    if (url.includes('/rest/v1/ai_digests?select')) return ok([]);
+    if (url === 'https://src.test/taal') return ok(PAGE);
+    if (url.includes('gemini-2.5-flash-image:generateContent')) return { ok: false, status: 429 };
+    if (url.includes('generateContent')) return ok(SUMMARY_RESP);
+    if (url.includes('on_conflict')) return { ok: true, status: 201 };
+    throw new Error('unexpected ' + url);
+  });
+  await handler({ method: 'GET', headers: { authorization: 'Bearer sekret' } }, t.res); t.done();
+  assert.equal(t.res.code, 200);
+  assert.equal(JSON.parse(t.calls.find((c) => c.url.includes('on_conflict')).opts.body).status, 'ok');
+  assert.match(t.res.body.results.volcano, /image failed/);
+});
+test('DIGEST_IMAGES=off never calls the image model', async () => {
+  const t = run({ DIGEST_VOLCANO_URL: 'https://src.test/taal', DIGEST_IMAGES: 'off' }, (url) => {
+    if (url.includes('/rest/v1/ai_digests?select')) return ok([]);
+    if (url === 'https://src.test/taal') return ok(PAGE);
+    if (url.includes('generateContent')) return ok(SUMMARY_RESP);
+    if (url.includes('on_conflict')) return { ok: true, status: 201 };
+    throw new Error('unexpected ' + url);
+  });
+  await handler({ method: 'GET', headers: { authorization: 'Bearer sekret' } }, t.res); t.done();
+  assert.ok(!t.calls.some((c) => c.url.includes('flash-image')));
+});
+test('a good summary row with no picture only retries the picture', async () => {
+  const t = run({ DIGEST_VOLCANO_URL: 'https://src.test/taal' }, (url) => {
+    if (url.includes('/rest/v1/ai_digests?select')) return ok([{ status: 'ok', image_url: null, summary: 'Alert Level 2.' }]);
+    if (url.includes('flash-image:generateContent')) return ok(IMG_RESP);
+    if (url.includes('/storage/v1/object/digest-images/')) return { ok: true, status: 200 };
+    if (url.includes('kind=eq.volcano')) return { ok: true, status: 204 };
+    throw new Error('unexpected ' + url);
+  });
+  await handler({ method: 'GET', headers: { authorization: 'Bearer sekret' } }, t.res); t.done();
+  assert.match(t.res.body.results.volcano, /summary already done; image ok/);
+  assert.ok(!t.calls.some((c) => c.url === 'https://src.test/taal'));
 });

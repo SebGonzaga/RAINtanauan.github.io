@@ -5,7 +5,7 @@
       "includeFiles": "assets/js/demo-data.js"
     },
     "api/daily-digest.js": {
-      "maxDuration": 30
+      "maxDuration": 60
     }
   },
   "headers": [

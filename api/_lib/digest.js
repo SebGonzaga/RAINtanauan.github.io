@@ -60,3 +60,36 @@ export function numbersSupported(summary, sourceText) {
   const nums = norm(summary).match(/\d+(?:\.\d+)?/g) || [];
   return nums.every((n) => src.includes(n));
 }
+
+const IMAGE_THEME = {
+  volcano: 'Taal Volcano and Taal Lake in Batangas, Philippines, seen from the lakeshore on a calm day',
+  heat: 'a hot sunny day in a Philippine town: bright sun, shade trees, people resting in the shade with water bottles and umbrellas',
+};
+
+/** Prompt for the illustration. Built ONLY from the already-validated summary (never from the raw web page). */
+export function buildImagePrompt(kind, summary) {
+  return (
+    'Create ONE calm, informative flat-style illustration (landscape 16:9) for a public disaster-preparedness app in Tanauan City, Batangas, Philippines. ' +
+    `Subject: ${IMAGE_THEME[kind] || IMAGE_THEME.volcano}. ` +
+    'Reflect ONLY what this summary of an official bulletin states, and nothing more:\n<summary>\n' + String(summary || '').slice(0, 1500) + '\n</summary>\n' +
+    'Rules: do NOT draw eruptions, ash columns, lava, fire, floods, injuries, damaged buildings or panic unless the summary explicitly describes them. ' +
+    'Keep the mood calm and factual, never sensational. No text, letters, numbers, logos, flags, maps or watermarks. ' +
+    'No realistic faces or real people. It must look like an illustration, not a photograph.'
+  );
+}
+
+const IMG_EXT = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp' };
+/** Pull the first inline image out of a Gemini generateContent response; null if none / unsupported / too large. */
+export function extractImage(json) {
+  const parts = json?.candidates?.[0]?.content?.parts;
+  if (!Array.isArray(parts)) return null;
+  for (const p of parts) {
+    const d = p?.inlineData || p?.inline_data;
+    const mime = d?.mimeType || d?.mime_type;
+    if (d && typeof d.data === 'string' && IMG_EXT[mime]) {
+      const buffer = Buffer.from(d.data, 'base64');
+      if (buffer.length > 100 && buffer.length <= 3 * 1024 * 1024) return { mime, ext: IMG_EXT[mime], buffer };
+    }
+  }
+  return null;
+}

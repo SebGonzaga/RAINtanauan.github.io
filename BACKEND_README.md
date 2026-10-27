@@ -123,3 +123,12 @@ they already insert/update the rows that trigger these webhooks.
 > past that, revisit a proper transactional provider (Brevo, SendGrid, or
 > AWS SES) — ask Claude to swap it back in; the webhook/trigger logic in
 > this file won't need to change, only `sendEmail`/`sendEmailBatch`.
+
+
+## Daily AI summary pictures (migration 011)
+
+1. Run `supabase/011_ai_digest_images.sql` once in the Supabase SQL Editor (adds `image_url` and the public `digest-images` bucket).
+2. Uses the same `GEMINI_API_KEY`. Optional env: `GEMINI_IMAGE_MODEL` (default `gemini-2.5-flash-image`), `DIGEST_IMAGES=off` to turn pictures off.
+3. Test without waiting for midnight (does NOT need a UI button):
+   `curl -H "Authorization: Bearer $CRON_SECRET" https://YOUR-SITE.vercel.app/api/daily-digest`
+   The JSON shows each result: `ok; image ok`, `source_unreachable`, `source_unparsed`, `ai_failed`, `skipped (... not set)` or `image failed: <reason>`.
