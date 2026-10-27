@@ -110,3 +110,45 @@ export function findLatestBulletinUrl(html, listUrl, code = 'tvo') {
   }
   return best ? best.url : null;
 }
+
+const BULLETIN_FIELDS = [
+  ['seismicity', 'Seismicity'],
+  ['acidity', 'Acidity(?:\\s+Main Crater Lake)?'],
+  ['temperature', 'Temperature(?:\\s+Main Crater Lake)?'],
+  ['so2', 'Sulfur Dioxide Flux'],
+  ['plume', 'Plume'],
+  ['deformation', 'Ground Deformation'],
+];
+
+/** Copies the parameter table of a PHIVOLCS Taal 24-hour bulletin word-for-word (no AI). null when it is not that kind of page. */
+export function parseTaalBulletin(text) {
+  const flat = String(text || '').replace(/\s+/g, ' ').trim();
+  const start = flat.search(/PARAMETERS/i);
+  if (start < 0) return null;
+  const rest = flat.slice(start + 10);
+  const endAt = rest.search(/Earthquake Location|RECOMMENDATION/i);
+  const area = endAt >= 0 ? rest.slice(0, endAt) : rest;
+  const hits = [];
+  let cursor = 0;
+  for (const [key, label] of BULLETIN_FIELDS) {
+    const m = new RegExp(label, 'i').exec(area.slice(cursor));
+    if (!m) continue;
+    hits.push({ key, from: cursor + m.index, vFrom: cursor + m.index + m[0].length });
+    cursor += m.index + m[0].length;
+  }
+  const out = {};
+  hits.forEach((h, i) => {
+    const v = area.slice(h.vFrom, i + 1 < hits.length ? hits[i + 1].from : area.length).replace(/^[\s:]+/, '').trim().slice(0, 240);
+    if (!v) return;
+    const dated = /^(.*?)\s*\(([^()]*\d{4}[^()]*)\)\s*$/.exec(v);
+    out[h.key] = dated && dated[1] ? { v: dated[1].trim(), d: dated[2].trim() } : { v };
+  });
+  if (Object.keys(out).length < 2) return null;
+  const level = extractAlertLevel(flat);
+  if (level != null) out.alert_level = level;
+  const label = /ALERT LEVEL\s*\(([^)]{2,40})\)/i.exec(flat);
+  if (label) out.alert_label = label[1].trim();
+  const date = /Date:\s*(\d{1,2}\s+[A-Za-z]+\s+\d{4})/.exec(flat);
+  if (date) out.bulletin_date = date[1];
+  return out;
+}

@@ -6,7 +6,7 @@
 //      GEMINI_MODEL (optional), GEMINI_IMAGE_MODEL (optional, default gemini-2.5-flash-image), DIGEST_IMAGES=off to skip pictures.
 // Pictures: after a summary is saved with status 'ok', one AI illustration is generated from that summary, uploaded to the public
 //      Supabase Storage bucket 'digest-images' (migration 011) and linked in ai_digests.image_url. Best effort: a failure never hides the text.
-import { htmlToText, extractAlertLevel, SYSTEM_PROMPT, buildPrompt, parseModelJson, numbersSupported, sha256Hex, phtDate, buildImagePrompt, extractImage, findLatestBulletinUrl } from './_lib/digest.js';
+import { htmlToText, extractAlertLevel, SYSTEM_PROMPT, buildPrompt, parseModelJson, numbersSupported, sha256Hex, phtDate, buildImagePrompt, extractImage, findLatestBulletinUrl, parseTaalBulletin } from './_lib/digest.js';
 
 const KINDS = [['volcano', 'DIGEST_VOLCANO_URL'], ['heat', 'DIGEST_HEAT_URL']];
 const GEMINI = 'https://generativelanguage.googleapis.com/v1beta/models';
@@ -67,8 +67,8 @@ async function imageStep(kind, date, summary) {
 }
 
 async function runOne(kind, url, date) {
-  const have = await fetch(`${process.env.SUPABASE_URL}/rest/v1/ai_digests?select=status,image_url,summary&kind=eq.${kind}&digest_date=eq.${date}`, { headers: sbHeaders() }).then((r) => (r.ok ? r.json() : [])).catch(() => []);
-  if (have[0] && have[0].status === 'ok') { // cron can fire twice; never overwrite a good row or re-spend AI calls
+  const have = await fetch(`${process.env.SUPABASE_URL}/rest/v1/ai_digests?select=status,image_url,summary,metrics&kind=eq.${kind}&digest_date=eq.${date}`, { headers: sbHeaders() }).then((r) => (r.ok ? r.json() : [])).catch(() => []);
+  if (have[0] && have[0].status === 'ok' && !(kind === 'volcano' && have[0].metrics == null)) { // cron can fire twice; never overwrite a good row or re-spend AI calls (a volcano row still missing the official numbers is rebuilt)
     if (have[0].image_url || !imagesOn() || !have[0].summary) return 'already done today';
     return 'summary already done; ' + (await imageStep(kind, date, have[0].summary)); // only the picture is missing: retry just that
   }
@@ -80,6 +80,7 @@ async function runOne(kind, url, date) {
       if (latest && latest !== url) { html = await getPage(latest); row.source_url = latest; }
     }
     const text = htmlToText(html);
+    if (kind === 'volcano') { const metrics = parseTaalBulletin(text); if (metrics) row.metrics = metrics; } // official numbers, copied by code (no AI); kept even if the summary fails
     row.source_fetched_at = new Date().toISOString();
     if (text.length < 200) { row.status = 'source_unparsed'; }
     else {
@@ -93,9 +94,15 @@ async function runOne(kind, url, date) {
       } catch (e) { console.error('digest AI error:', kind, e.message); }
     }
   } catch (e) { console.error('digest source error:', kind, e.message); }
-  const save = await fetch(`${process.env.SUPABASE_URL}/rest/v1/ai_digests?on_conflict=kind,digest_date`, {
-    method: 'POST', headers: { ...sbHeaders(), 'Content-Type': 'application/json', Prefer: 'resolution=merge-duplicates,return=minimal' }, body: JSON.stringify(row),
+  const post = (r) => fetch(`${process.env.SUPABASE_URL}/rest/v1/ai_digests?on_conflict=kind,digest_date`, {
+    method: 'POST', headers: { ...sbHeaders(), 'Content-Type': 'application/json', Prefer: 'resolution=merge-duplicates,return=minimal' }, body: JSON.stringify(r),
   });
+  let save = await post(row);
+  if (!save.ok && row.metrics) { // migration 012 not run yet? still save everything else
+    const { metrics, ...plain } = row;
+    console.error('digest: saving without metrics (run supabase/012_ai_digest_metrics.sql)');
+    save = await post(plain);
+  }
   if (!save.ok) { console.error('digest save error:', save.status); return 'could not save'; }
   if (row.status === 'ok') return 'ok; ' + (await imageStep(kind, date, row.summary));
   return row.status;

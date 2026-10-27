@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { htmlToText, extractAlertLevel, parseModelJson, numbersSupported, phtDate, buildImagePrompt, extractImage, findLatestBulletinUrl } from '../api/_lib/digest.js';
+import { htmlToText, extractAlertLevel, parseModelJson, numbersSupported, phtDate, buildImagePrompt, extractImage, findLatestBulletinUrl, parseTaalBulletin } from '../api/_lib/digest.js';
 import handler from '../api/daily-digest.js';
 
 test('htmlToText drops scripts/tags and decodes entities', () => {
@@ -82,7 +82,7 @@ test('does not publish a summary containing invented numbers', async () => {
   assert.equal(saved.status, 'ai_failed'); assert.equal(saved.summary, null);
 });
 test('skips work already done today', async () => {
-  const t = run({ DIGEST_VOLCANO_URL: 'https://src.test/taal' }, (url) => { if (url.includes('/rest/v1/ai_digests?select')) return ok([{ status: 'ok', image_url: 'https://sb.test/storage/v1/object/public/digest-images/volcano/x.png', summary: 's' }]); throw new Error('unexpected ' + url); });
+  const t = run({ DIGEST_VOLCANO_URL: 'https://src.test/taal' }, (url) => { if (url.includes('/rest/v1/ai_digests?select')) return ok([{ status: 'ok', image_url: 'https://sb.test/storage/v1/object/public/digest-images/volcano/x.png', summary: 's', metrics: { alert_level: 1 } }]); throw new Error('unexpected ' + url); });
   await handler({ method: 'GET', headers: { authorization: 'Bearer sekret' } }, t.res); t.done();
   assert.equal(t.res.body.results.volcano, 'already done today');
 });
@@ -143,7 +143,7 @@ test('DIGEST_IMAGES=off never calls the image model', async () => {
 });
 test('a good summary row with no picture only retries the picture', async () => {
   const t = run({ DIGEST_VOLCANO_URL: 'https://src.test/taal' }, (url) => {
-    if (url.includes('/rest/v1/ai_digests?select')) return ok([{ status: 'ok', image_url: null, summary: 'Alert Level 2.' }]);
+    if (url.includes('/rest/v1/ai_digests?select')) return ok([{ status: 'ok', image_url: null, summary: 'Alert Level 2.', metrics: { alert_level: 2 } }]);
     if (url.includes('flash-image:generateContent')) return ok(IMG_RESP);
     if (url.includes('/storage/v1/object/digest-images/')) return { ok: true, status: 200 };
     if (url.includes('kind=eq.volcano')) return { ok: true, status: 204 };
@@ -177,4 +177,44 @@ test('volcano list page: reads the newest Taal bulletin and stores its URL', asy
   const saved = JSON.parse(t.calls.find((c) => c.url.includes('on_conflict')).opts.body);
   assert.equal(saved.status, 'ok'); assert.equal(saved.alert_level, 1);
   assert.equal(saved.source_url, 'https://w.test/bulletin/activity-tvo?bid=16937&lang=en');
+});
+
+// ---- official numbers copied from the bulletin ----
+const ROW = (label, val) => `<tr><td><img src="x.png"><br><b>${label}</b></td><td>${val}</td></tr>`;
+const BULLETIN_HTML = '<table><tr><td>ALERT LEVEL</td><td>1</td></tr></table><table><tr><td>Date: 26 October 2026<br>ALERT LEVEL<br>(Low-level unrest)</td><td>1</td></tr></table><p>PARAMETERS</p><table>' +
+  ROW('Seismicity', '8 volcanic earthquakes including 1 volcanic tremor (31 hours and 44 minutes duration)') +
+  ROW('Acidity</b><br>Main Crater Lake<b>', '0.48 (10 February 2026)') +
+  ROW('Temperature</b><br>Main Crater Lake<b>', '63.1 ℃ (10 February 2026)') +
+  ROW('Sulfur Dioxide Flux', '557 tonnes / day (23 October 2026)') +
+  ROW('Plume', '1800 meters tall; Voluminous emission; north-northwest drift') +
+  ROW('Ground Deformation', 'Short-term inflation of Taal Volcano Island') +
+  '</table><p>Earthquake Location:</p><p>RECOMMENDATION/COMMENT</p>';
+test('parseTaalBulletin copies the parameter table exactly', () => {
+  const m = parseTaalBulletin(htmlToText(BULLETIN_HTML));
+  assert.equal(m.alert_level, 1); assert.equal(m.alert_label, 'Low-level unrest'); assert.equal(m.bulletin_date, '26 October 2026');
+  assert.deepEqual(m.so2, { v: '557 tonnes / day', d: '23 October 2026' });
+  assert.deepEqual(m.temperature, { v: '63.1 ℃', d: '10 February 2026' });
+  assert.deepEqual(m.acidity, { v: '0.48', d: '10 February 2026' });
+  assert.equal(m.seismicity.v, '8 volcanic earthquakes including 1 volcanic tremor (31 hours and 44 minutes duration)');
+  assert.equal(m.plume.v, '1800 meters tall; Voluminous emission; north-northwest drift');
+  assert.equal(m.deformation.v, 'Short-term inflation of Taal Volcano Island');
+});
+test('parseTaalBulletin returns null for pages that are not a bulletin', () => {
+  assert.equal(parseTaalBulletin('Just some news text about Taal.'), null);
+  assert.equal(parseTaalBulletin('PARAMETERS nothing useful here'), null);
+});
+test('volcano run stores the official numbers, and still saves without them if column 012 is missing', async () => {
+  let n = 0;
+  const t = run({ DIGEST_VOLCANO_URL: 'https://src.test/b', DIGEST_IMAGES: 'off' }, (url, opts) => {
+    if (url.includes('/rest/v1/ai_digests?select')) return ok([]);
+    if (url === 'https://src.test/b') return ok(BULLETIN_HTML);
+    if (url.includes('generateContent')) return ok({ candidates: [{ content: { parts: [{ text: '{"summary":"Alert Level 1. Plume 1800 meters tall.","points":[]}' }] } }] });
+    if (url.includes('on_conflict')) return ++n === 1 ? { ok: false, status: 400 } : { ok: true, status: 201 };
+    throw new Error('unexpected ' + url);
+  });
+  await handler({ method: 'GET', headers: { authorization: 'Bearer sekret' } }, t.res); t.done();
+  const posts = t.calls.filter((c) => c.url.includes('on_conflict')).map((c) => JSON.parse(c.opts.body));
+  assert.equal(posts.length, 2);
+  assert.equal(posts[0].metrics.so2.v, '557 tonnes / day');
+  assert.equal(posts[1].metrics, undefined); assert.equal(posts[1].status, 'ok');
 });

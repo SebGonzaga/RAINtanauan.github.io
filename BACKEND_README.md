@@ -132,3 +132,9 @@ they already insert/update the rows that trigger these webhooks.
 3. Test without waiting for midnight (does NOT need a UI button):
    `curl -H "Authorization: Bearer $CRON_SECRET" https://YOUR-SITE.vercel.app/api/daily-digest`
    The JSON shows each result: `ok; image ok`, `source_unreachable`, `source_unparsed`, `ai_failed`, `skipped (... not set)` or `image failed: <reason>`.
+
+## Official bulletin tiles on the volcano page (migration 012)
+
+Run `supabase/012_ai_digest_metrics.sql` once. `/api/daily-digest` then copies the PHIVOLCS bulletin's parameter table (alert level, sulfur dioxide,
+crater lake temperature and acidity, earthquakes, plume, ground deformation) into `ai_digests.metrics` by code (no AI). A volcano row that
+exists without these numbers is rebuilt on the next run. Without migration 012 everything else still saves; only the tiles are missing.
