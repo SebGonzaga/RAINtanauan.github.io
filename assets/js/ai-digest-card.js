@@ -14,6 +14,7 @@ window.RainDigest = (function () {
   };
   const LV_COLOR = ["#15803d", "#b45309", "#c2410c", "#b91c1c", "#7f1d1d", "#7f1d1d"]; // white text on each is >= 4.5:1
   const TAG_AI = '<span class="demo-data-tag" style="background:#b45309">AI-GENERATED · UNOFFICIAL</span>';
+  const TAG_AI_SUM = '<span class="demo-data-tag" style="background:#b45309">AI-GENERATED SUMMARY</span>'; // under the official tiles: still says AI, drops "unofficial"
   const TAG_OFFICIAL = '<span class="demo-data-tag" style="background:#0f766e">OFFICIAL DATA · PHIVOLCS BULLETIN</span>';
 
   function injectCss() {
@@ -91,7 +92,7 @@ window.RainDigest = (function () {
           '<div class="rd-note" style="margin-top:.55rem;">Copied automatically by software from the PHIVOLCS bulletin' + (m.bulletin_date ? " dated " + esc(m.bulletin_date) : "") +
           ". Each reading keeps the date PHIVOLCS gave it. If anything here differs from PHIVOLCS, follow PHIVOLCS." +
           (link(mRow) ? ' <a href="' + esc(link(mRow)) + '" target="_blank" rel="noopener noreferrer">Open source page</a>' : "") + "</div>" +
-          '<hr style="opacity:.2;margin:.9rem 0;"><div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2"><b style="font-size:.88rem;">Plain-language summary</b>' + TAG_AI + "</div>";
+          '<hr style="opacity:.2;margin:.9rem 0;"><div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2"><b style="font-size:.88rem;">Plain-language summary</b>' + TAG_AI_SUM + "</div>";
       } else {
         html += stale(d);
       }
